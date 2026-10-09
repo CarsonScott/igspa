@@ -2,7 +2,7 @@
 
 A framework for simulating interactive particle systems with no underlying geometrical structure, using gillespie SSA with global-bucket optimization, Fisher Information Geometry, and explicit graph topology tracking to derive a statistical distance metric by which to calculate interaction potentials.
 
-Useful for modeling biomolecular dynamics in cell simulations.
+Useful for modeling biomolecular dynamics in cellular simulations.
 
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
