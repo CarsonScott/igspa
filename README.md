@@ -175,6 +175,7 @@ Let a particle system be defined by the tuple $\mathcal{S} = (\mathcal{V}, \math
 * $\mathcal{C} = \{c_1, c_2, \dots, c_m\}$ is the alphabet of binding site colors. A bijective mapping function $\text{comp}: \mathcal{C} \to \mathcal{C}$ satisfies comp(c) = -c and comp(-c) = c.
 * $\mathbf{K}_i = [K_i^{c_1}, \dots, K_i^{c_m}]^T \in \mathbb{N}^m$ specifies the static total site capacities.
 * $\boldsymbol{\theta}_i(t) = [\theta_i^{c_1}(t), \dots, \theta_i^{c_m}(t)]^T \in [0, 1]^m$ details the continuous tracking coordinate on the information manifold $\mathcal{M}_i$, representing the fraction of active, unbonded sites:
+
 $$\theta_i^c(t) = \frac{\text{Unbound Sites of Color } c \text{ on Particle } i}{K_i^c}$$
 
 The distance element on this manifold is governed by the localized Shahshahani form of the Fisher Information Metric Tensor ($g_{\mu\nu}$):
@@ -184,19 +185,26 @@ This metric guarantees that as a specific color resource approaches exhaustion (
 ### 2. The Explicit Graph Geometry
 
 The actual physical structure of the system is a combinatorial multi-graph $\mathcal{G}(t) = (\mathcal{V}, \mathcal{E}(t))$, parameterized by a set of directional adjacency matrices $A^c \in \mathbb{N}^{N \times N}$, tracking active bonds across individual color layers. Conservation laws mandate that:
+
 $$\theta_i^c(t) = 1 - \frac{\sum_{j=1}^N A_{ij}^c(t)}{K_i^c}$$
 
 ### 3. Mathematical Optimization: Global Buckets
 
 #### 3.1 Bypassing Quadratic Complexity
 Standard stochastic simulation loops over all pairs $\mathcal{O}(N^2)$ to sum individual interaction parameters. This optimization establishes a set of global containers mapping colors to active sets of particle indices:
+
 $$\mathcal{B}_c = \{ i \in \mathcal{V} \mid \theta_i^c > 0 \}$$
+
 The global binding propensity ($\alpha_{\text{bind}}^{c, -c}$) for a color channel is evaluated instantly using aggregate states:
+
 $$\alpha_{\text{bind}}^{c, -c} = k_{\text{on}} \cdot \left( \sum_{i \in \mathcal{B}_c} K_i^c \theta_i^c \right) \cdot \left( \sum_{j \in \mathcal{B}_{-c}} K_j^{-c} \theta_j^{-c} \right)$$
 
 #### 3.2 Dissociation Channels
 The global breaking propensity scales linearly with the cardinal volume of the active graph edges:
+
+
 $$\alpha_{\text{break}} = \sum_{e \in \mathcal{E}} k_{\text{off}} = k_{\text{off}} \cdot |\mathcal{E}|$$
+
 The sum of all active pathways yields the system parameter $a_0 = \sum \alpha_{\text{bind}} + \alpha_{\text{break}}$.
 
 ### 4. The Two-Stage Selection Routine
@@ -216,11 +224,14 @@ Each simulation iteration proceeds via the following sequence:
 
 ### 6.1 Allosteric Coupling (Intra-Particle Interaction Matrix)
 To introduce dependencies where a bond formation at one site alters the affinity of another site on the same particle, define an Allosteric Configuration Tensor ($\mathbf{W}_i$). When a binding event modifies coordinate $\theta_i^{c_1}$, it applies an instantaneous linear transformation to another color vector channel:
+
 $$\theta_i^{c_2} \to \theta_i^{c_2} \times \mathbf{W}_i(c_1, c_2)$$
+
 This dynamically updates the global buckets $\mathcal{B}_{c_2}$ without introducing spatial coordinates, allowing the model to simulate cooperative binding and enzyme-like feedback cascades.
 
 ### 6.2 Topological Constraints & Ring Closures
 While the system is non-spatial, checking graph properties can introduce virtual geometry constraints. For instance, to penalize or favor the formation of closed molecular rings (cycles), the algorithm can check the shortest path distance between candidate nodes i and j in the explicit graph before confirming a bond. If a path already exists, the binding rate can be scaled by a cyclization factor γ:
+
 $$\alpha_{\text{cyclic}} = \alpha_{\text{bind}} \times \gamma(\text{Graph Distance}(i, j))$$
 This allows the simulation to capture the physical reality of loop closures and polymer entanglement using pure network topology.
 
