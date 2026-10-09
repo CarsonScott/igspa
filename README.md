@@ -1,6 +1,6 @@
 # Information-Geometric Stochastic Particle Assembly (IGSPA)
 
-A framework for simulating interactive particle systems with no underlying geometrical structure, using gillespie SSA with global-bucket optimization, Fisher Information Geometry, and explicit graph topology tracking to derive a statistical distance metric.
+A framework for simulating interactive particle systems with no underlying geometrical structure, using gillespie SSA with global-bucket optimization, Fisher Information Geometry, and explicit graph topology tracking to derive a statistical distance metric and calculate interaction potentials.
 
 Useful for modeling biomolecular dynamics in cell simulations.
 
