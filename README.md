@@ -44,11 +44,11 @@ Bonds form a multi-graph G(t) = (V, E(t)) with colored edges. Conservation law:
 
 ### Computational Complexity
 
-|| Metric | Standard SSA | IGSPA (Global Bucket) |
-||---|---|---|
-|| Time/step | O(N²|C|) | **O(|C| + |E|)** |
-|| Space | O(N²) | **O(N|C| + |E|)** |
-|| Scaling | Quadratic | **Linear/Constant** |
+| Metric | Standard SSA | IGSPA (Global Bucket) |
+|---|---|---|
+| Time/step | O(N²|C|) | **O(|C| + |E|)** |
+| Space | O(N²) | **O(N|C| + |E|)** |
+| Scaling | Quadratic | **Linear/Constant** |
 
 ---
 
