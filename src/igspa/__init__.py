@@ -21,7 +21,7 @@ __author__ = "IGSPA Team"
 
 from .core.particle import Particle, ParticleBlueprint
 from .core.system import ParticleSystem, create_system_from_strings, SimulationConfig
-from .core.colors import ColorPalette, COMPLEMENTS
+from .core.colors import Color, ColorPalette, COMPLEMENTS
 from .algorithms.gillespie import (
     GlobalBucketSampler,
     TwoStageSampler,

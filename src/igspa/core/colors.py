@@ -12,7 +12,7 @@ This is modeled after DNA base pairing (A↔T, C↔G) but with 3 complementary p
 
 from enum import Enum, auto
 from typing import Dict, Set, FrozenSet
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 class Color(Enum):
@@ -65,12 +65,15 @@ class ColorPalette:
     """
     colors: FrozenSet[Color]
     complement_map: Dict[Color, Color]
-    
+    str_map: Dict[Color, Color] = field(default_factory=dict)
+
     def __post_init__(self):
         # Validate complementarity is symmetric and complete
         for c, comp in self.complement_map.items():
             assert self.complement_map[comp] == c, f"Complementarity not symmetric for {c}"
             assert c in self.colors and comp in self.colors, f"Color {c} or {comp} not in palette"
+        for c in self.colors:
+            self.str_map[c.name.lower()] = c
     
     @classmethod
     def standard(cls) -> 'ColorPalette':
@@ -79,13 +82,14 @@ class ColorPalette:
         return cls(colors=colors, complement_map=COMPLEMENT_MAP)
     
     @classmethod
-    def from_strings(cls, color_pairs: Dict[str, str]) -> 'ColorPalette':
+    def from_strings(cls, color_pairs: Dict[str, str], color_defs: Dict[str, Color]=None) -> 'ColorPalette':
         """Create palette from string color pairs."""
         colors = set()
         complement_map = {}
+        str_map = COLOR_STR_MAP if color_defs is None else color_defs
         for c1_str, c2_str in color_pairs.items():
-            c1 = COLOR_STR_MAP[c1_str.lower()]
-            c2 = COLOR_STR_MAP[c2_str.lower()]
+            c1 = str_map[c1_str.lower()]
+            c2 = str_map[c2_str.lower()]
             colors.add(c1)
             colors.add(c2)
             complement_map[c1] = c2

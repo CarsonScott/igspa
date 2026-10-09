@@ -43,7 +43,7 @@ class ParticleBlueprint:
     def from_string_list(cls, color_strings: List[str], palette: ColorPalette, 
                          label: Optional[str] = None) -> 'ParticleBlueprint':
         """Create blueprint from list of color strings."""
-        colors = [COLOR_STR_MAP[s.lower()] for s in color_strings]
+        colors = [palette.str_map[s.lower()] for s in color_strings]
         return cls.from_color_list(colors, label)
     
     @property
@@ -58,6 +58,11 @@ class ParticleBlueprint:
         parts = [f"{color.name.lower()}:{count}" for color, count in sorted(self.site_counts.items(), key=lambda x: x[0].name)]
         label_str = f" ({self.label})" if self.label else ""
         return f"Blueprint[{', '.join(parts)}]{label_str}"
+
+    def get_string_list(self):
+        strs = []
+        [[strs.append(x.name.lower()) for j in range(self.site_counts[x])] for x in self.site_counts]
+        return strs
 
 
 @dataclass
