@@ -10,6 +10,15 @@ Useful for modeling biomolecular dynamics in cell simulations.
 
 ---
 
+## Documentation
+
+- **User Guide (recommended)**: [USER_GUIDE.md](USER_GUIDE.md) 
+- **API Reference**: See docstrings in each module
+- **Mathematical Details**: This README (sections below)
+
+---
+
+
 ## Overview
 
 Information-Geometric Stochastic Particle Assembly (IGSPA) simulates the self-assembly of particles with colored binding sites **without relying on spatial coordinates**. The system maintains a **dual geometric representation**:
@@ -156,16 +165,6 @@ src/igspa/
 └── utils/
     └── analysis.py          # Validation, SteadyStateAnalyzer, ensemble tools
 ```
-
----
-
-## Documentation
-
-- **User Guide**: [USER_GUIDE.md](USER_GUIDE.md) - Complete usage documentation
-- **API Reference**: See docstrings in each module
-- **Mathematical Details**: This README (sections below)
-
----
 
 ## Detailed Mathematical Specifications
 
