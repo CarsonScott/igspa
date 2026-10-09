@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "igspa"
+version = "1.0.0"
+description = "Information-Geometric Stochastic Particle Assembly"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Carson Scott"}]
+dependencies = [
+    "numpy>=1.24",
+    "networkx>=3.0",
+    "scipy>=1.10",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["igspa*"]
