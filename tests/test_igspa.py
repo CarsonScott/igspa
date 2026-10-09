@@ -1,5 +1,5 @@
 """
-Tests for NS-IGAA Core Components
+Tests for IGSPA Core Components
 """
 
 import pytest
