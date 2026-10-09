@@ -1,6 +1,7 @@
 # Information-Geometric Stochastic Particle Assembly (IGSPA)
 
-A framework for simulating particle assembly using Gillespie SSA with global-bucket optimization, Fisher Information Geometry, and explicit graph topology tracking.
+A framework for simulating interactive particle systems with no underlying geometrical space.
+Uses gillespie SSA with global-bucket optimization, Fisher Information Geometry, and explicit graph topology tracking.
 
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -51,14 +52,6 @@ Bonds form a multi-graph G(t) = (V, E(t)) with colored edges. Conservation law:
 || Scaling | Quadratic | **Linear/Constant** |
 
 ---
-
-## Installation
-
-```bash
-git clone <repository>
-cd prob_particles
-pip install -e .
-```
 
 **Dependencies**: `numpy>=1.24`, `networkx>=3.0`, `scipy>=1.10`, `lxml>=6.0` (for GraphML export)
 
@@ -120,40 +113,25 @@ NS-IGAA maintains two synchronized representations:
 
 ## Features
 
-### 🎯 Multiple Sampling Algorithms
+### Multiple Sampling Algorithms
 - **TwoStageSampler** (default): O(|C| + |E|) two-stage Gillespie
 - **CompositionRejectionSampler**: O(1) dyadic binning for large systems (N > 50)
 
-### 📊 Comprehensive Analysis
+### Comprehensive Analysis
 - **SteadyStateAnalyzer**: Equilibrium constants, gel fraction, cluster sizes
 - **Manifold Geometry**: Geodesic distances, saturation distances, metric condition numbers
 - **Thermodynamics**: Entropy, free energy, chemical potentials
 - **Ensemble Statistics**: Multi-trajectory statistical analysis
 
-### 💾 Full I/O Pipeline
+### Full I/O Pipeline
 - **Logging**: JSONL streaming, NumPy .npz, Pandas DataFrames
 - **Export**: JSON, Pickle, NPZ, GraphML (Gephi/Cytoscape), CSV
 - **Checkpointing**: Full state snapshots for resumable simulations
 
-### 🎨 Flexible Color Systems
+### Flexible Color/Port Systems
 - Standard 6-color palette (3 complementary pairs)
 - Custom palettes (e.g., DNA: A↔T, C↔G)
 - String-based color specification
-
----
-
-## Examples
-
-```bash
-# Basic simulation
-python examples/basic_simulation.py
-
-# Advanced features (logging, CR sampling, ensembles, geometry, custom palettes)
-python examples/advanced_features.py
-
-# Original minimal example
-python example.py
-```
 
 ---
 
@@ -176,15 +154,6 @@ src/igspa/
 │   └── serialization.py     # SimulationLogger, StateExporter
 └── utils/
     └── analysis.py          # Validation, SteadyStateAnalyzer, ensemble tools
-```
-
----
-
-## Testing
-
-```bash
-python -m pytest tests/ -v
-# 48 tests passing
 ```
 
 ---
