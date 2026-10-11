@@ -1,5 +1,4 @@
-"""
-Information-Geometric Stochastic Particle Assembly (IGSPA)
+"""Information-Geometric Stochastic Particle Assembly (IGSPA)
 
 A framework for simulating particle assembly using Gillespie SSA with
 global-bucket optimization, Fisher Information Geometry, and explicit
@@ -19,9 +18,11 @@ Complexity: O(|C| + |E|) per step vs O(N²·|C|) standard
 __version__ = "1.0.0"
 __author__ = "IGSPA Team"
 
-from .core.particle import Particle, ParticleBlueprint
-from .core.system import ParticleSystem, create_system_from_strings, SimulationConfig
+from .core.particle import Particle, ParticleBlueprint, ParticleArchetype
+from .core.system import ParticleSystem, create_system_from_strings, create_system_from_config, SimulationConfig
 from .core.colors import Color, ColorPalette, COMPLEMENTS
+from .core.ports import PortPalette, DEFAULT_PORT_PALETTE
+from .core.config import SystemConfiguration
 from .algorithms.gillespie import (
     GlobalBucketSampler,
     TwoStageSampler,
@@ -31,19 +32,24 @@ from .geometry.manifold import InformationManifold, FisherMetric
 from .topology.graph import BondGraph, ComplexAnalyzer
 from .io.serialization import SimulationLogger, StateExporter
 from .utils.analysis import (
-    SteadyStateAnalyzer, analyze_manifold_geometry, 
+    SteadyStateAnalyzer, analyze_manifold_geometry,
     compute_thermodynamic_quantities, run_ensemble, compute_ensemble_statistics,
     create_standard_test_system, create_linear_chain_system, create_branched_system
 )
 
 __all__ = [
     "Particle",
-    "ParticleBlueprint", 
+    "ParticleBlueprint",
+    "ParticleArchetype",
     "ParticleSystem",
     "create_system_from_strings",
+    "create_system_from_config",
     "SimulationConfig",
     "ColorPalette",
     "COMPLEMENTS",
+    "PortPalette",
+    "DEFAULT_PORT_PALETTE",
+    "SystemConfiguration",
     "GlobalBucketSampler",
     "TwoStageSampler",
     "CompositionRejectionSampler",

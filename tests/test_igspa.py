@@ -266,11 +266,11 @@ class TestBondGraph:
         bonds = self.graph.get_bonds()
         assert len(bonds) == 2
     
-    def test_color_degree(self):
-        self.graph.add_bond(0, 1, Color.WHITE, Color.BLACK)
-        assert self.graph.get_color_degree(0, Color.WHITE) == 1
-        assert self.graph.get_color_degree(1, Color.BLACK) == 1
-        assert self.graph.get_color_degree(0, Color.RED) == 0
+    def test_port_degree(self):
+        self.graph.add_bond(0, 1, "white", "black")
+        assert self.graph.get_port_degree(0, "white") == 1
+        assert self.graph.get_port_degree(1, "black") == 1
+        assert self.graph.get_port_degree(0, "red") == 0
     
     def test_adjacency_matrix(self):
         self.graph.add_bond(0, 1, Color.WHITE, Color.BLACK)

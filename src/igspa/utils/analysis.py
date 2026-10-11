@@ -25,7 +25,7 @@ def validate_system(system) -> List[str]:
     # Check particle availability vs bonds
     for particle in system.particles:
         for color in particle.capacities:
-            bound_count = system.bond_graph.get_color_degree(particle.particle_id, color)
+            bound_count = system.bond_graph.get_port_degree(particle.particle_id, color.name.lower())
             available = particle.available_sites.get(color, 0)
             capacity = particle.capacities[color]
             

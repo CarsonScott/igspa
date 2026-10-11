@@ -1,5 +1,4 @@
-"""
-Core Particle System: Main simulation orchestrator.
+"""Core Particle System: Main simulation orchestrator.
 
 The ParticleSystem class coordinates all components:
 - Particles with dynamic binding state
@@ -11,13 +10,14 @@ The ParticleSystem class coordinates all components:
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Callable, Any, Tuple
+from typing import List, Dict, Optional, Callable, Any, Tuple, Union
 from collections import Counter
 import numpy as np
 import time
 
 from .colors import Color, ColorPalette, DEFAULT_PALETTE
-from .particle import Particle, ParticleBlueprint, create_particles_from_blueprints
+from .particle import Particle, ParticleBlueprint, ParticleArchetype, create_particles_from_blueprints, create_particles_from_configuration
+from .config import SystemConfiguration
 from ..geometry.manifold import InformationManifold, create_manifold_from_blueprints
 from ..topology.graph import BondGraph, ComplexAnalyzer, create_bond_graph_from_system
 from ..algorithms.gillespie import (
@@ -51,7 +51,7 @@ class SimulationState:
     manifold: InformationManifold
     complex_stats: Dict
     sampler_state: Dict
-    
+
     def to_dict(self) -> Dict:
         return {
             'step': self.step,
@@ -64,9 +64,9 @@ class SimulationState:
 class ParticleSystem:
     """
     Main simulation system integrating all NS-IGAA components.
-    
+
     This is the primary user-facing class for running simulations.
-    
+
     Example:
         blueprints = [
             ParticleBlueprint.from_string_list(['white', 'red'], palette),
@@ -76,7 +76,7 @@ class ParticleSystem:
         system.run(1000)
         system.print_complexes()
     """
-    
+
     def __init__(
         self,
         blueprints: List[ParticleBlueprint],
@@ -85,25 +85,25 @@ class ParticleSystem:
     ):
         self.palette = palette or DEFAULT_PALETTE
         self.config = config or SimulationConfig()
-        
+
         # Set random seed if provided
         if self.config.seed is not None:
             np.random.seed(self.config.seed)
             import random
             random.seed(self.config.seed)
-        
+
         # Create particles from blueprints
         self.particles = create_particles_from_blueprints(blueprints, self.palette)
-        
+
         # Create core components
         self.manifold = InformationManifold(
             particles=self.particles,
             palette=self.palette
         )
-        
+
         self.bond_graph = create_bond_graph_from_system(self.particles, self.palette)
         self.complex_analyzer = ComplexAnalyzer(self.bond_graph)
-        
+
         # Create samplers
         self.bucket_sampler, self.sampler = create_sampler(
             particles=self.particles,
@@ -113,13 +113,13 @@ class ParticleSystem:
             bond_graph=self.bond_graph,
             use_cr=self.config.use_composition_rejection
         )
-        
+
         # Simulation state
         self.current_time = 0.0
         self.current_step = 0
         self.running = False
         self.history: List[SimulationState] = []
-        
+
         # Statistics
         self.stats = {
             'bind_events': 0,
@@ -127,77 +127,160 @@ class ParticleSystem:
             'total_dt': 0.0,
             'time_per_step': [],
         }
-    
+
+    @classmethod
+    def create_from_config(
+        cls,
+        config: SystemConfiguration,
+        n_particles: int,
+        p: Optional[Union[List[float], Dict[ParticleArchetype, float]]] = None,
+        k_on: float = 1.0,
+        k_off: float = 0.1,
+        seed: Optional[int] = None,
+        **sim_config_kwargs
+    ) -> 'ParticleSystem':
+        """
+        Create a ParticleSystem from a SystemConfiguration.
+
+        Args:
+            config: SystemConfiguration containing palette and archetypes
+            n_particles: Number of particles to create
+            p: Probability distribution for archetype selection:
+               - None for uniform distribution
+               - list of probabilities in archetype order
+               - dict mapping archetype -> probability
+            k_on: Binding rate constant
+            k_off: Breaking rate constant
+            seed: Random seed for reproducibility
+            **sim_config_kwargs: Additional SimulationConfig parameters
+
+        Returns:
+            Configured ParticleSystem instance
+        """
+        # Create particles from configuration
+        particles = create_particles_from_configuration(n_particles, config, p, seed)
+
+        # Create simulation config
+        sim_config = SimulationConfig(k_on=k_on, k_off=k_off, seed=seed, **sim_config_kwargs)
+
+        # Create system instance (bypassing __init__ to use our custom setup)
+        system = object.__new__(cls)
+        system.palette = config.palette
+        system.config = sim_config
+
+        # Set random seed if provided
+        if system.config.seed is not None:
+            np.random.seed(system.config.seed)
+            import random
+            random.seed(system.config.seed)
+
+        system.particles = particles
+
+        # Create core components
+        system.manifold = InformationManifold(
+            particles=system.particles,
+            palette=system.palette
+        )
+
+        system.bond_graph = create_bond_graph_from_system(system.particles, system.palette)
+        system.complex_analyzer = ComplexAnalyzer(system.bond_graph)
+
+        # Create samplers
+        system.bucket_sampler, system.sampler = create_sampler(
+            particles=system.particles,
+            palette=system.palette,
+            k_on=system.config.k_on,
+            k_off=system.config.k_off,
+            bond_graph=system.bond_graph,
+            use_cr=system.config.use_composition_rejection
+        )
+
+        # Simulation state
+        system.current_time = 0.0
+        system.current_step = 0
+        system.running = False
+        system.history: List[SimulationState] = []
+
+        # Statistics
+        system.stats = {
+            'bind_events': 0,
+            'break_events': 0,
+            'total_dt': 0.0,
+            'time_per_step': [],
+        }
+
+        return system
+
     @property
     def n_particles(self) -> int:
         return len(self.particles)
-    
+
     @property
     def n_bonds(self) -> int:
         return self.bond_graph.n_bonds
-    
+
     def step(self) -> bool:
         """
         Execute one Gillespie SSA step.
-        
+
         Returns True if step executed, False if no events possible (equilibrium).
         """
         if isinstance(self.sampler, TwoStageSampler):
             result = self.sampler.step()
-            
+
             if not result[0]:
                 return False
-            
+
             event_type = result[1]
             dt = result[2]
-            
+
             self.current_time += dt
             self.current_step += 1
             self.stats['total_dt'] += dt
             self.stats['time_per_step'].append(dt)
-            
+
             if event_type == 'bind':
                 part_i, part_j, color_i, color_j = result[3], result[4], result[5], result[6]
                 self.sampler.execute_bind(part_i, part_j, color_i, color_j)
                 self.stats['bind_events'] += 1
-                
+
                 # Run callbacks
                 for cb in self.config.callbacks:
                     cb('bind', self.current_step, self.current_time, part_i, part_j, color_i, color_j)
-                    
+
             elif event_type == 'break':
                 bond = result[3]
                 self.sampler.execute_break(bond)
                 self.stats['break_events'] += 1
-                
+
                 for cb in self.config.callbacks:
                     cb('break', self.current_step, self.current_time, bond)
-            
+
             # Invalidate CR bins if using composition-rejection
             if isinstance(self.sampler, CompositionRejectionSampler):
                 self.sampler.invalidate_bins()
-            
+
             # Invalidate complex cache
             self.complex_analyzer.invalidate_cache()
-            
+
             return True
-            
+
         else:
             # CompositionRejectionSampler path
             event_type, event_data = self.sampler.sample_event_cr()
-            
+
             if event_type is None:
                 return False
-            
+
             # Sample time step
             total_bind = self.bucket_sampler.compute_total_binding_propensity()
             total_break = self.bucket_sampler.k_off * self.bond_graph.n_bonds
             total_prop = total_bind + total_break
             dt = np.random.exponential(1.0 / total_prop)
-            
+
             self.current_time += dt
             self.current_step += 1
-            
+
             if event_type == 'bind':
                 part_i, part_j, color_i, color_j = event_data
                 self.sampler.execute_bind(part_i, part_j, color_i, color_j)
@@ -206,45 +289,45 @@ class ParticleSystem:
                 bond = event_data
                 self.sampler.execute_break(bond)
                 self.stats['break_events'] += 1
-            
+
             self.sampler.invalidate_bins()
             self.complex_analyzer.invalidate_cache()
-            
+
             return True
-    
-    def run(self, max_steps: int = None, max_time: float = None, 
+
+    def run(self, max_steps: int = None, max_time: float = None,
             verbose: bool = True) -> Dict:
         """
         Run simulation until max_steps or max_time reached.
-        
+
         Returns final statistics dictionary.
         """
         max_steps = max_steps or self.config.max_steps
         max_time = max_time or self.config.max_time
-        
+
         self.running = True
-        
+
         if verbose:
             print(f"Starting NS-IGAA Simulation")
             print(f"  Particles: {self.n_particles}")
-            print(f"  Colors: {len(self.palette)}")
+            print(f"  Ports: {len(self.palette)}")
             print(f"  k_on: {self.config.k_on}, k_off: {self.config.k_off}")
             print(f"  Max steps: {max_steps}, Max time: {max_time}")
             print("-" * 50)
-        
+
         start_time = time.time()
-        
+
         for step in range(1, max_steps + 1):
             if not self.step():
                 if verbose:
                     print(f"\nSystem reached equilibrium at step {self.current_step}")
                 break
-            
+
             if self.current_time >= max_time:
                 if verbose:
                     print(f"\nReached max time {max_time} at step {self.current_step}")
                 break
-            
+
             # Logging
             if verbose and step % self.config.log_interval == 0:
                 elapsed = time.time() - start_time
@@ -253,10 +336,10 @@ class ParticleSystem:
                       f"binds={self.stats['bind_events']}, "
                       f"breaks={self.stats['break_events']}, "
                       f"{elapsed:.2f}s wall-time")
-        
+
         self.running = False
         wall_time = time.time() - start_time
-        
+
         # Final statistics
         final_stats = {
             'steps': self.current_step,
@@ -267,11 +350,11 @@ class ParticleSystem:
             'wall_time': wall_time,
             'steps_per_second': self.current_step / wall_time if wall_time > 0 else 0,
         }
-        
+
         if self.config.track_complexes:
             complexes = self.complex_analyzer.get_complexes()
             final_stats['complexes'] = self.complex_analyzer.get_complex_statistics()
-        
+
         if verbose:
             print("-" * 50)
             print(f"Simulation complete in {wall_time:.2f}s")
@@ -282,37 +365,37 @@ class ParticleSystem:
             if 'complexes' in final_stats:
                 cs = final_stats['complexes']
                 print(f"Complexes: {cs['n_complexes']}, Largest: {cs['largest_size']}")
-        
+
         return final_stats
-    
+
     def get_complexes(self) -> List[List[int]]:
         """Get current complexes as lists of particle indices."""
         return [list(c) for c in self.complex_analyzer.get_complexes()]
-    
+
     def print_complexes(self, labels: bool = True):
         """Print current complex structure."""
         complexes = self.complex_analyzer.get_complexes()
         print(f"\n=== COMPLEXES (Time: {self.current_time:.3f}s, Step: {self.current_step}) ===")
-        
+
         for idx, comp in enumerate(complexes):
             if labels:
                 members = [self.particles[i].label for i in comp]
                 print(f"Complex {idx + 1} (Size {len(members)}): {' -- '.join(members)}")
             else:
                 print(f"Complex {idx + 1} (Size {len(comp)}): {sorted(comp)}")
-    
+
     def get_bond_list(self) -> List[Tuple[int, int, str, str]]:
         """Get all bonds as (particle_i, particle_j, color_i, color_j)."""
         bonds = []
         for bond in self.bond_graph.get_bonds():
             bonds.append((
-                bond.particle_i, 
-                bond.particle_j, 
-                bond.color_i.name.lower(), 
+                bond.particle_i,
+                bond.particle_j,
+                bond.color_i.name.lower(),
                 bond.color_j.name.lower()
             ))
         return bonds
-    
+
     def get_availability_matrix(self) -> Dict[str, List[int]]:
         """Get availability matrix: particle -> {color: available_count}."""
         result = {}
@@ -322,11 +405,11 @@ class ParticleSystem:
                 for c in self.palette.colors
             }
         return result
-    
+
     def get_state_snapshot(self) -> SimulationState:
         """Get complete state snapshot for checkpointing."""
         complex_stats = self.complex_analyzer.get_complex_statistics() if self.config.track_complexes else {}
-        
+
         return SimulationState(
             step=self.current_step,
             time=self.current_time,
@@ -339,7 +422,7 @@ class ParticleSystem:
                 'aggregates': {c.name: a for c, a in self.bucket_sampler.aggregate_sites.items()},
             }
         )
-    
+
     def __str__(self) -> str:
         return (f"ParticleSystem(n_particles={self.n_particles}, "
                 f"n_bonds={self.n_bonds}, time={self.current_time:.3f}, "
@@ -355,7 +438,7 @@ def create_system_from_strings(
 ) -> ParticleSystem:
     """
     Convenience factory to create system from string color lists.
-    
+
     Example:
         system = create_system_from_strings([
             ['white', 'red'],
@@ -365,11 +448,51 @@ def create_system_from_strings(
     """
     if palette is None:
         palette = DEFAULT_PALETTE
-    
+
     blueprints = [
         ParticleBlueprint.from_string_list(colors, palette)
         for colors in particle_strings
     ]
-    
+
     config = SimulationConfig(k_on=k_on, k_off=k_off, **config_kwargs)
     return ParticleSystem(blueprints, palette, config)
+
+
+def create_system_from_config(
+    config: SystemConfiguration,
+    n_particles: int,
+    p: Optional[Union[List[float], Dict[ParticleArchetype, float]]] = None,
+    k_on: float = 1.0,
+    k_off: float = 0.1,
+    seed: Optional[int] = None,
+    **config_kwargs
+) -> ParticleSystem:
+    """
+    Factory function to create a system from a SystemConfiguration.
+
+    This is the preferred way to create systems with the new port-palette model.
+
+    Args:
+        config: SystemConfiguration containing palette and archetypes
+        n_particles: Number of particles to create
+        p: Probability distribution for archetype selection:
+           - None for uniform distribution
+           - list of probabilities in archetype order
+           - dict mapping archetype -> probability
+        k_on: Binding rate constant
+        k_off: Breaking rate constant
+        seed: Random seed for reproducibility
+        **config_kwargs: Additional SimulationConfig parameters
+
+    Returns:
+        Configured ParticleSystem instance
+    """
+    return ParticleSystem.create_from_config(
+        config=config,
+        n_particles=n_particles,
+        p=p,
+        k_on=k_on,
+        k_off=k_off,
+        seed=seed,
+        **config_kwargs
+    )

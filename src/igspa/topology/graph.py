@@ -21,29 +21,29 @@ import networkx as nx
 import numpy as np
 from numpy.typing import NDArray
 
-from ..core.colors import Color, ColorPalette
+from ..core.ports import PortPalette
 from ..core.particle import Particle
 
 
 @dataclass
 class Bond:
-    """A single bond between two particles at specific colored sites."""
+    """A single bond between two particles at specific port sites."""
     particle_i: int
     particle_j: int
-    color_i: Color
-    color_j: Color
+    port_i: str  # Port string (e.g., "white")
+    port_j: str  # Port string (e.g., "black")
     edge_key: int  # NetworkX edge key for multi-graph
     
     def __str__(self) -> str:
-        return f"{self.particle_i}({self.color_i.name.lower()})--{self.particle_j}({self.color_j.name.lower()})"
-    
+        return f"{self.particle_i}({self.port_i})--{self.particle_j}({self.port_j})"
+
     def reversed(self) -> 'Bond':
         """Return the same bond with particles swapped."""
         return Bond(
             particle_i=self.particle_j,
             particle_j=self.particle_i,
-            color_i=self.color_j,
-            color_j=self.color_i,
+            port_i=self.port_j,
+            port_j=self.port_i,
             edge_key=self.edge_key
         )
 
@@ -61,16 +61,16 @@ class BondGraph:
     matrices A^c for each color layer.
     """
     
-    def __init__(self, n_particles: int, palette: ColorPalette):
+    def __init__(self, n_particles: int, palette: PortPalette):
         self.n_particles = n_particles
         self.palette = palette
         self.graph = nx.MultiGraph()
         self.graph.add_nodes_from(range(n_particles))
         self.edge_counter = 0
-        # Index: color -> set of (u, v, key) for fast lookups
-        self._color_index: Dict[Color, Set[Tuple[int, int, int]]] = defaultdict(set)
-        # Degree tracking per particle per color
-        self._color_degree: Dict[int, Dict[Color, int]] = defaultdict(lambda: defaultdict(int))
+        # Index: port -> set of (u, v, key) for fast lookups
+        self._port_index: Dict[str, Set[Tuple[int, int, int]]] = defaultdict(set)
+        # Degree tracking per particle per port
+        self._port_degree: Dict[int, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
     
     @property
     def n_bonds(self) -> int:
@@ -81,9 +81,9 @@ class BondGraph:
         return self.n_particles
     
     def add_bond(self, particle_i: int, particle_j: int, 
-                 color_i: Color, color_j: Color) -> int:
+                 port_i: str, port_j: str) -> int:
         """
-        Add a bond between particles at specified colors.
+        Add a bond between particles at specified ports.
         
         Returns the edge key for future reference.
         """
@@ -94,17 +94,17 @@ class BondGraph:
         self.graph.add_edge(
             particle_i, particle_j,
             key=edge_key,
-            color_i=color_i,
-            color_j=color_j
+            port_i=port_i,
+            port_j=port_j
         )
         
-        # Update color index
-        self._color_index[color_i].add((particle_i, particle_j, edge_key))
-        self._color_index[color_j].add((particle_j, particle_i, edge_key))
+        # Update port index
+        self._port_index[port_i].add((particle_i, particle_j, edge_key))
+        self._port_index[port_j].add((particle_j, particle_i, edge_key))
         
-        # Update color degrees
-        self._color_degree[particle_i][color_i] += 1
-        self._color_degree[particle_j][color_j] += 1
+        # Update port degrees
+        self._port_degree[particle_i][port_i] += 1
+        self._port_degree[particle_j][port_j] += 1
         
         return edge_key
     
@@ -119,42 +119,42 @@ class BondGraph:
             return None
         
         edge_data = self.graph.get_edge_data(particle_i, particle_j, key=edge_key)
-        color_i = edge_data['color_i']
-        color_j = edge_data['color_j']
+        port_i = edge_data['port_i']
+        port_j = edge_data['port_j']
         
         # Remove from NetworkX
         self.graph.remove_edge(particle_i, particle_j, key=edge_key)
         
-        # Update color index
-        self._color_index[color_i].discard((particle_i, particle_j, edge_key))
-        self._color_index[color_j].discard((particle_j, particle_i, edge_key))
+        # Update port index
+        self._port_index[port_i].discard((particle_i, particle_j, edge_key))
+        self._port_index[port_j].discard((particle_j, particle_i, edge_key))
         
-        # Update color degrees
-        self._color_degree[particle_i][color_i] = max(0, self._color_degree[particle_i][color_i] - 1)
-        self._color_degree[particle_j][color_j] = max(0, self._color_degree[particle_j][color_j] - 1)
+        # Update port degrees
+        self._port_degree[particle_i][port_i] = max(0, self._port_degree[particle_i][port_i] - 1)
+        self._port_degree[particle_j][port_j] = max(0, self._port_degree[particle_j][port_j] - 1)
         
         # Clean up empty degree entries
-        if self._color_degree[particle_i][color_i] == 0:
-            del self._color_degree[particle_i][color_i]
-        if self._color_degree[particle_j][color_j] == 0:
-            del self._color_degree[particle_j][color_j]
+        if self._port_degree[particle_i][port_i] == 0:
+            del self._port_degree[particle_i][port_i]
+        if self._port_degree[particle_j][port_j] == 0:
+            del self._port_degree[particle_j][port_j]
         
-        return Bond(particle_i, particle_j, color_i, color_j, edge_key)
+        return Bond(particle_i, particle_j, port_i, port_j, edge_key)
     
     def get_bonds(self) -> List[Bond]:
         """Get all bonds as list."""
         bonds = []
         for u, v, key, data in self.graph.edges(keys=True, data=True):
-            bonds.append(Bond(u, v, data['color_i'], data['color_j'], key))
+            bonds.append(Bond(u, v, data['port_i'], data['port_j'], key))
         return bonds
     
-    def get_bonds_by_color(self, color: Color) -> List[Bond]:
-        """Get all bonds involving a specific color."""
+    def get_bonds_by_port(self, port: str) -> List[Bond]:
+        """Get all bonds involving a specific port."""
         bonds = []
-        for u, v, key in self._color_index.get(color, set()):
+        for u, v, key in self._port_index.get(port, set()):
             edge_data = self.graph.get_edge_data(u, v, key=key)
             if edge_data:
-                bonds.append(Bond(u, v, edge_data['color_i'], edge_data['color_j'], key))
+                bonds.append(Bond(u, v, edge_data['port_i'], edge_data['port_j'], key))
         return bonds
     
     def get_particle_bonds(self, particle_idx: int) -> List[Bond]:
@@ -163,23 +163,23 @@ class BondGraph:
         for neighbor, key, data in self.graph.edges(particle_idx, keys=True, data=True):
             if neighbor == particle_idx:
                 # Self-loop
-                bonds.append(Bond(particle_idx, particle_idx, data['color_i'], data['color_j'], key))
+                bonds.append(Bond(particle_idx, particle_idx, data['port_i'], data['port_j'], key))
             else:
-                # Determine which color belongs to this particle
-                # The graph stores color_i for u, color_j for v
+                # Determine which port belongs to this particle
+                # The graph stores port_i for u, port_j for v
                 if u == particle_idx:
-                    bonds.append(Bond(u, v, data['color_i'], data['color_j'], key))
+                    bonds.append(Bond(u, v, data['port_i'], data['port_j'], key))
                 else:
-                    bonds.append(Bond(v, u, data['color_j'], data['color_i'], key))
+                    bonds.append(Bond(v, u, data['port_j'], data['port_i'], key))
         return bonds
     
-    def get_color_degree(self, particle_idx: int, color: Color) -> int:
-        """Get number of bonds of a specific color for a particle."""
-        return self._color_degree[particle_idx].get(color, 0)
+    def get_port_degree(self, particle_idx: int, port: str) -> int:
+        """Get number of bonds of a specific port for a particle."""
+        return self._port_degree[particle_idx].get(port, 0)
     
-    def get_all_color_degrees(self, particle_idx: int) -> Dict[Color, int]:
-        """Get all color degrees for a particle."""
-        return dict(self._color_degree[particle_idx])
+    def get_all_port_degrees(self, particle_idx: int) -> Dict[str, int]:
+        """Get all port degrees for a particle."""
+        return dict(self._port_degree[particle_idx])
     
     def has_bond_between(self, u: int, v: int) -> bool:
         """Check if any bond exists between two particles."""
