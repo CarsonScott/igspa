@@ -95,7 +95,9 @@ class BondGraph:
             particle_i, particle_j,
             key=edge_key,
             port_i=port_i,
-            port_j=port_j
+            port_j=port_j,
+            end_i=particle_i,
+            end_j=particle_j
         )
 
         # Update port index
@@ -119,6 +121,7 @@ class BondGraph:
             return None
 
         edge_data = self.graph.get_edge_data(particle_i, particle_j, key=edge_key)
+        particle_i, particle_j = edge_data['end_i'], edge_data['end_j']
         port_i = edge_data['port_i']
         port_j = edge_data['port_j']
 
@@ -144,8 +147,8 @@ class BondGraph:
     def get_bonds(self) -> List[Bond]:
         """Get all bonds as list."""
         bonds = []
-        for u, v, key, data in self.graph.edges(keys=True, data=True):
-            bonds.append(Bond(u, v, data['port_i'], data['port_j'], key))
+        for _u, _v, key, data in self.graph.edges(keys=True, data=True):
+            bonds.append(Bond(data['end_i'], data['end_j'], data['port_i'], data['port_j'], key))
         return bonds
 
     def get_bonds_by_port(self, port: str) -> List[Bond]:
@@ -154,23 +157,17 @@ class BondGraph:
         for u, v, key in self._port_index.get(port, set()):
             edge_data = self.graph.get_edge_data(u, v, key=key)
             if edge_data:
-                bonds.append(Bond(u, v, edge_data['port_i'], edge_data['port_j'], key))
+                bonds.append(Bond(edge_data['end_i'], edge_data['end_j'], edge_data['port_i'], edge_data['port_j'], key))
         return bonds
 
     def get_particle_bonds(self, particle_idx: int) -> List[Bond]:
         """Get all bonds for a specific particle."""
         bonds = []
-        for neighbor, key, data in self.graph.edges(particle_idx, keys=True, data=True):
-            if neighbor == particle_idx:
-                # Self-loop
-                bonds.append(Bond(particle_idx, particle_idx, data['port_i'], data['port_j'], key))
+        for _u, _v, key, data in self.graph.edges(particle_idx, keys=True, data=True):
+            if data['end_i'] == particle_idx:
+                bonds.append(Bond(data['end_i'], data['end_j'], data['port_i'], data['port_j'], key))
             else:
-                # Determine which port belongs to this particle
-                # The graph stores port_i for u, port_j for v
-                if u == particle_idx:
-                    bonds.append(Bond(u, v, data['port_i'], data['port_j'], key))
-                else:
-                    bonds.append(Bond(v, u, data['port_j'], data['port_i'], key))
+                bonds.append(Bond(data['end_j'], data['end_i'], data['port_j'], data['port_i'], key))
         return bonds
 
     def get_port_degree(self, particle_idx: int, port: str) -> int:

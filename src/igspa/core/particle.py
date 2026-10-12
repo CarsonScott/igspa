@@ -219,8 +219,7 @@ def create_particles_from_configuration(
     """
     if seed is not None:
         random.seed(seed)
-    archetypes = config.archetypes
-    # archetypes = sorted(list(config.archetypes), key=lambda a: a.label or '')
+    archetypes = list(config.archetypes)
     if not archetypes:
         raise ValueError("Configuration must contain at least one archetype")
     

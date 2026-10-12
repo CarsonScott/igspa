@@ -334,6 +334,20 @@ class TestBondGraph:
         bonds = self.graph.get_bonds()
         assert len(bonds) == 2
 
+    def test_bond_endpoint_orientation_is_preserved(self):
+        key = self.graph.add_bond(1, 0, "white", "black")
+
+        bond = self.graph.get_bonds()[0]
+        assert (bond.particle_i, bond.port_i) == (1, "white")
+        assert (bond.particle_j, bond.port_j) == (0, "black")
+        assert self.graph.get_bonds_by_port("black")[0] == bond
+        assert self.graph.get_particle_bonds(0)[0].port_i == "black"
+
+        removed = self.graph.remove_bond(0, 1, key)
+        assert (removed.particle_i, removed.port_i) == (1, "white")
+        assert self.graph.get_port_degree(1, "white") == 0
+        assert self.graph.get_port_degree(0, "black") == 0
+
     def test_port_degree(self):
         self.graph.add_bond(0, 1, "white", "black")
         assert self.graph.get_port_degree(0, "white") == 1
