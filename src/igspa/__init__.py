@@ -31,13 +31,19 @@ from .geometry.manifold import InformationManifold, FisherMetric
 from .topology.graph import BondGraph, ComplexAnalyzer
 from .io.serialization import SimulationLogger, StateExporter
 from .visualization.networkx_visualizer import (
+    IGSPAVisualizer,
     VisualizationConfig,
-    ForceAtlas2Layout,
-    ParticleSystemVisualizer,
-    create_visualizer,
     animate_system,
     run_headless_simulation,
     plot_static_snapshot,
+)
+from .visualization.builders import (
+    create_palette,
+    create_archetypes,
+    create_config,
+    create_system,
+    random_palette,
+    random_archetypes,
 )
 from .utils.analysis import (
     SteadyStateAnalyzer, analyze_manifold_geometry,
@@ -75,10 +81,14 @@ __all__ = [
     "create_linear_chain_system",
     "create_branched_system",
     "VisualizationConfig",
-    "ForceAtlas2Layout",
-    "ParticleSystemVisualizer",
-    "create_visualizer",
     "animate_system",
     "run_headless_simulation",
     "plot_static_snapshot",
+    "IGSPAVisualizer",
+    "create_palette",
+    "create_archetypes",
+    "create_config",
+    "create_system",
+    "random_palette",
+    "random_archetypes",
 ]

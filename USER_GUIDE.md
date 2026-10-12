@@ -404,6 +404,27 @@ a₀ = Σ_(p,q) α_bind^{p,q} + k_off × |E|
 
 ## Examples
 
+### Real-Time Visualization
+
+The visualization helpers build a system from a compact port-pair definition and animate it directly:
+
+```python
+from igspa import IGSPAVisualizer, create_system
+
+system_definition = {
+    "palette": [("a", "b"), ("b", "c"), ("c", "a")],
+    "archetypes": ["aab", "abb", "bbc", "cca"],
+    "n_particles": 50,
+    "k_on": 0.1,
+    "k_off": 0.01,
+    "seed": 42,
+}
+visualizer = IGSPAVisualizer(system_definition, speed=0.01, steps_per_frame=2)
+visualizer.run(max_frames=300)
+```
+
+`create_palette`, `create_archetypes`, and `create_config` are also available for explicit construction. `random_palette(labels, scalar_factor, seed)` and `random_archetypes(n_types, m_port_range, palette, seed)` generate reproducible random definitions.
+
 ### Example 1: Basic Simulation (`examples/basic_simulation.py`)
 
 ```bash

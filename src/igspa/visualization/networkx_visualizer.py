@@ -4,218 +4,58 @@ Real-time NetworkX/Matplotlib Visualizer for ParticleSystems.
 Provides animated visualization of particle assembly dynamics using:
 - matplotlib.animation.FuncAnimation for real-time updates
 - NetworkX for graph representation
-- ForceAtlas2-inspired force-directed layout with periodic updates
+- NetworkX spring layout with periodic updates
 - Persistent node positions between simulation steps
 - Edge-only updates for bond formation/breakage events
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Callable, Any, Set
-from collections import defaultdict
+from dataclasses import dataclass, replace
+from typing import Dict, List, Optional, Tuple, Callable, Set, Mapping, Union
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import networkx as nx
-import warnings
 
 from ..core.system import ParticleSystem
-from ..core.particle import Particle
-from ..topology.graph import BondGraph, Bond
-from ..core.ports import PortPalette
+from .builders import create_system
 
 
 @dataclass
 class VisualizationConfig:
     """Configuration for the network visualizer."""
-    figsize: Tuple[float, float] = (12, 12)
+    figsize: Tuple[float, float] = (1,1)
     node_size_range: Tuple[float, float] = (5,5)
     node_size_by: str = "degree"
     edge_width_range: Tuple[float, float] = (1.0,1.0)
     edge_width_by: str = "port"
     layout_update_interval: int = 1
-    forceatlas2_iterations: int = 1
-    forceatlas2_scaling: float = 1
-    forceatlas2_gravity: float = -1.0
-    forceatlas2_spring_strength: float = 1
-    forceatlas2_dissipation: float = 0.1
-    forceatlas2_prevent_overlap: bool = True
-    forceatlas2_overlap_threshold: float = 1
+    layout_iterations: int = 5
+    layout_seed: Optional[int] = None
+    layout_speed: float = 1.0
+    steps_per_frame: int = 1
     show_labels: bool = False
     label_fontsize: int = 8
     show_legend: bool = True
     background_color: str = "white"
     particle_color_map: Optional[Dict[str, str]] = None
     port_color_map: Optional[Dict[str, str]] = None
-    animation_interval: int = 1
+    animation_interval: int = 50
     repeat: bool = False
     save_path: Optional[str] = None
     save_fps: int = 10
     dpi: int = 100
 
 
-@dataclass
-class ForceAtlas2State:
-    """Internal state for ForceAtlas2 layout computation."""
-    positions: np.ndarray
-    velocities: np.ndarray
-    masses: np.ndarray
-    forces: np.ndarray
-    nodes: List[int]
-
-
-class ForceAtlas2Layout:
-    """
-    ForceAtlas2-inspired force-directed layout algorithm.
-    
-    Simplified implementation based on the ForceAtlas2 algorithm (Jacomy et al., 2014).
-    Features:
-    - Attractive forces along edges (spring-like)
-    - Repulsive forces between all nodes (Coulomb-like)
-    - Gravity force pulling toward center
-    - Velocity damping for stability
-    - Overlap prevention (optional)
-    """
-    
-    def __init__(
-        self,
-        n_nodes: int,
-        scaling: float = 1.0,
-        gravity: float = 1.0,
-        spring_strength: float = 1,
-        dissipation: float = 1.0,
-        prevent_overlap: bool = True,
-        overlap_threshold: float = 1.0,
-        seed: Optional[int] = None,
-    ):
-        self.n_nodes = n_nodes
-        self.scaling = scaling
-        self.gravity = gravity
-        self.spring_strength = spring_strength
-        self.dissipation = dissipation
-        self.prevent_overlap = prevent_overlap
-        self.overlap_threshold = overlap_threshold
-        
-        if seed is not None:
-            np.random.seed(seed)
-        
-        self.state = ForceAtlas2State(
-            positions=np.random.randn(n_nodes, 2) * 1,
-            velocities=np.zeros((n_nodes, 2)),
-            masses=np.ones(n_nodes),
-            forces=np.zeros((n_nodes, 2)),
-            nodes=list(range(n_nodes)),
-        )
-    
-    def set_positions(self, positions: np.ndarray):
-        """Set node positions directly."""
-        self.state.positions = positions.copy()
-    
-    def set_masses(self, masses: np.ndarray):
-        """Set node masses (e.g., based on degree)."""
-        self.state.masses = masses.copy()
-    
-    def compute_step(
-        self,
-        edges: List[Tuple[int, int]],
-        edge_weights: Optional[np.ndarray] = None,
-        fixed_nodes: Optional[Set[int]] = None,
-    ) -> np.ndarray:
-        """
-        Compute one ForceAtlas2 iteration.
-        
-        Args:
-            edges: List of (u, v) edge tuples
-            edge_weights: Optional edge weights for spring strength
-            fixed_nodes: Set of node indices to keep fixed
-            
-        Returns:
-            Updated positions array
-        """
-        n = self.n_nodes
-        pos = self.state.positions
-        vel = self.state.velocities
-        mass = self.state.masses
-        forces = self.state.forces
-        
-        forces.fill(0.0)
-        
-        if edge_weights is None:
-            edge_weights = np.ones(len(edges))
-        
-        for (u, v), w in zip(edges, edge_weights):
-            if u == v:
-                continue
-            delta = pos[v] - pos[u]
-            dist = np.linalg.norm(delta)
-            angle = np.atan2(delta[1], delta[0])
-            vec = np.array([np.cos(angle), np.sin(angle)])
-            rad = 10
-            force_vec = delta / 2
-            forces[u] += force_vec
-            forces[v] -= force_vec
-        
-        for i in range(n):
-            for j in range(i + 1, n):
-                delta = pos[j] - pos[i]
-                angle = np.atan2(delta[1], delta[0])
-                vec = np.array([np.cos(angle), np.sin(angle)])
-                dist = np.linalg.norm(delta)
-                force_vec = vec * 1 / (dist ** 2)
-                forces[i] -= force_vec
-                forces[j] += force_vec
-        
-        # center = np.mean(pos, axis=0)
-        # for i in range(n):
-        #     # if fixed_nodes and i in fixed_nodes:
-        #     #     continue
-        #     delta = center - pos[i]
-        #     angle = np.atan2(delta[1], delta[0])
-        #     vec = np.array(np.cos(angle), np.sin(angle))
-        #     dist = np.linalg.norm(delta)
-        #     force_mag = 100/(dist**1)
-        #     force_vec = vec * force_mag
-        #     forces[i] -= force_vec
-        
-        # vel *= self.dissipation
-        vel += forces
-        pos += vel * self.scaling
-        
-        self.state.positions = pos
-        self.state.velocities = vel
-        self.state.forces = forces
-        
-        return pos
-    
-    def run(
-        self,
-        edges: List[Tuple[int, int]],
-        iterations: int = 50,
-        edge_weights: Optional[np.ndarray] = None,
-        fixed_nodes: Optional[Set[int]] = None,
-        callback: Optional[Callable[[int, np.ndarray], None]] = None,
-    ) -> np.ndarray:
-        """Run ForceAtlas2 for multiple iterations."""
-        for i in range(iterations):
-            pos = self.compute_step(edges, edge_weights, fixed_nodes)
-            if callback:
-                callback(i, pos.copy())
-        return self.state.positions.copy()
-    
-    def get_positions(self) -> np.ndarray:
-        """Get current node positions."""
-        return self.state.positions.copy()
-
-
-class ParticleSystemVisualizer:
+class IGSPAVisualizer:
     """
     Real-time visualizer for ParticleSystem using NetworkX and Matplotlib.
     
     Features:
     - Step-wise simulation updates inside FuncAnimation
-    - ForceAtlas2 layout updated periodically
+    - Spring layout updated periodically
     - Persistent node positions between steps
     - Edge-only updates for bond events
     - Color-coded particles by type/archetype
@@ -224,26 +64,49 @@ class ParticleSystemVisualizer:
     
     def __init__(
         self,
-        system: ParticleSystem,
+        system: Union[ParticleSystem, Mapping],
+        speed: Optional[float] = None,
+        steps_per_frame: Optional[int] = None,
         config: Optional[VisualizationConfig] = None,
     ):
+        system = create_system(system) if isinstance(system, Mapping) else system
+        if config is None:
+            config = VisualizationConfig(
+                layout_speed=1.0 if speed is None else speed,
+                steps_per_frame=1 if steps_per_frame is None else steps_per_frame,
+            )
+        else:
+            changes = {}
+            if speed is not None:
+                changes["layout_speed"] = speed
+            if steps_per_frame is not None:
+                changes["steps_per_frame"] = steps_per_frame
+            if changes:
+                config = replace(config, **changes)
         self.system = system
-        self.config = config or VisualizationConfig()
+        self.config = config
+        if self.config.layout_update_interval < 1:
+            raise ValueError("layout_update_interval must be at least 1")
+        if self.config.steps_per_frame < 1:
+            raise ValueError("steps_per_frame must be at least 1")
+        if not 0.0 < self.config.layout_speed <= 1.0:
+            raise ValueError("layout_speed must be greater than 0 and at most 1")
+        if self.config.animation_interval < 1:
+            raise ValueError("animation_interval must be at least 1 millisecond")
         
         self.n_particles = system.n_particles
         self.palette = system.palette
         
         self._setup_colors()
         self._setup_graph()
-        self._setup_forceatlas2()
         self._setup_figure()
         
         self.step_count = 0
         self.layout_step_count = 0
-        self.current_edges: Set[Tuple[int, int, str, str]] = set()
+        self.current_edges: Set[Tuple[int, int, str, str, int]] = set()
         self.animation: Optional[animation.FuncAnimation] = None
         self._running = False
-        
+        self._sync_graph_with_system()
         self._update_node_properties()
         self._initialize_positions()
     
@@ -273,27 +136,11 @@ class ParticleSystemVisualizer:
         self.nx_graph = nx.MultiGraph()
         self.nx_graph.add_nodes_from(range(self.n_particles))
         
-        self.node_positions = np.random.rand(self.n_particles, 2) * 1
+        self.node_positions = np.random.default_rng(self.config.layout_seed).normal(
+            size=(self.n_particles, 2)
+        )
         
         self.edge_key_counter = 0
-        self.edge_keys: Dict[Tuple[int, int, str, str], int] = {}
-    
-    def _setup_forceatlas2(self):
-        """Initialize ForceAtlas2 layout engine."""
-        masses = np.ones(self.n_particles)
-        for i, particle in enumerate(self.system.particles):
-            masses[i] = 1.0 + particle.archetype.total_sites * 0.5
-        
-        self.forceatlas2 = ForceAtlas2Layout(
-            n_nodes=self.n_particles,
-            scaling=self.config.forceatlas2_scaling,
-            gravity=self.config.forceatlas2_gravity,
-            spring_strength=self.config.forceatlas2_spring_strength,
-            dissipation=self.config.forceatlas2_dissipation,
-            prevent_overlap=self.config.forceatlas2_prevent_overlap,
-            overlap_threshold=self.config.forceatlas2_overlap_threshold,
-        )
-        self.forceatlas2.set_masses(masses)
     
     def _setup_figure(self):
         """Initialize matplotlib figure and axes."""
@@ -320,21 +167,23 @@ class ParticleSystemVisualizer:
         )
     
     def _initialize_positions(self):
-        """Initialize layout with ForceAtlas2."""
-        edges = []
-        edge_weights = []
-        for bond in self.system.bond_graph.get_bonds():
-            edges.append((bond.particle_i, bond.particle_j))
-            edge_weights.append(1.0)
-        
-        if edges:
-            self.forceatlas2.run(
-                edges=edges,
-                edge_weights=np.array(edge_weights),
-                iterations=self.config.forceatlas2_iterations,
-            )
-        self.node_positions = self.forceatlas2.get_positions()
+        """Initialize positions using the current graph structure."""
+        self._update_layout(interpolate=False)
         self._update_node_properties()
+
+    def _update_layout(self, iterations: Optional[int] = None, interpolate: bool = True):
+        if self.n_particles == 0:
+            return
+        target = nx.spring_layout(
+            self.nx_graph,
+            pos={node: self.node_positions[node] for node in range(self.n_particles)},
+            iterations=self.config.layout_iterations if iterations is None else iterations,
+            seed=self.config.layout_seed,
+            weight=None,
+        )
+        target_positions = np.array([target[node] for node in range(self.n_particles)])
+        rate = self.config.layout_speed if interpolate else 1.0
+        self.node_positions += rate * (target_positions - self.node_positions)
     
     def _update_node_properties(self):
         """Compute node colors and sizes based on current state."""
@@ -343,24 +192,22 @@ class ParticleSystemVisualizer:
         self.node_labels = {}
         
         degrees = dict(self.nx_graph.degree())
-        max_degree = max(degrees.values()) if degrees else 1
+        max_degree = max(degrees.values()) if degrees else 0
+        max_sites = max((particle.archetype.total_sites for particle in self.system.particles), default=0)
         
         for i, particle in enumerate(self.system.particles):
             archetype = particle.archetype
             color = self.particle_colors.get(archetype, 'gray')
             self.node_colors.append(color)
             
-            # if self.config.node_size_by == "degree":
-            #     degree = degrees.get(i, 0)
-            #     size = self.config.node_size_range[0] + \
-            #            (self.config.node_size_range[1] - self.config.node_size_range[0]) * \
-            #            (degree / max_degree if max_degree > 0 else 0)
-            # elif self.config.node_size_by == "sites":
-            #     total_sites = particle.archetype.total_sites
-            #     max_sites = max(p.archetype.total_sites for p in self.system.particles)
-            #     size = 1
-            # else:
-            size = 5
+            if self.config.node_size_by == "degree":
+                fraction = degrees.get(i, 0) / max_degree if max_degree else 0.0
+            elif self.config.node_size_by == "sites":
+                fraction = particle.archetype.total_sites / max_sites if max_sites else 0.0
+            else:
+                fraction = 0.5
+            size_min, size_max = self.config.node_size_range
+            size = size_min + (size_max - size_min) * fraction
             
             self.node_sizes.append(size)
             
@@ -372,45 +219,26 @@ class ParticleSystemVisualizer:
         Synchronize NetworkX graph with ParticleSystem bond graph.
         
         Returns:
-            (added_edges, removed_edges) as sets of (u, v, port_i, port_j)
+            (added_edges, removed_edges) as sets of (u, v, port_i, port_j, edge_key)
         """
         system_bonds = set()
         for bond in self.system.bond_graph.get_bonds():
-            system_bonds.add((bond.particle_i, bond.particle_j, bond.port_i, bond.port_j))
+            system_bonds.add((bond.particle_i, bond.particle_j, bond.port_i, bond.port_j, bond.edge_key))
         
         added = system_bonds - self.current_edges
         removed = self.current_edges - system_bonds
         
-        for u, v, port_i, port_j in added:
-            edge_key = self.edge_key_counter
-            self.edge_key_counter += 1
+        for u, v, port_i, port_j, edge_key in added:
+            self.edge_key_counter = max(self.edge_key_counter, edge_key + 1)
             self.nx_graph.add_edge(u, v, key=edge_key, port_i=port_i, port_j=port_j)
-            self.edge_keys[(u, v, port_i, port_j)] = edge_key
         
-        for u, v, port_i, port_j in removed:
-            key = self.edge_keys.pop((u, v, port_i, port_j), None)
-            if key is not None and self.nx_graph.has_edge(u, v, key=key):
-                self.nx_graph.remove_edge(u, v, key=key)
+        for u, v, _port_i, _port_j, edge_key in removed:
+            if self.nx_graph.has_edge(u, v, key=edge_key):
+                self.nx_graph.remove_edge(u, v, key=edge_key)
         
         self.current_edges = system_bonds.copy()
         
         return added, removed
-    
-    def _update_forceatlas2(self):
-        """Update layout using ForceAtlas2."""
-        edges = []
-        edge_weights = []
-        for u, v, port_i, port_j in self.current_edges:
-            edges.append((u, v))
-            edge_weights.append(1.0)
-        
-        if edges:
-            self.forceatlas2.run(
-                edges=edges,
-                edge_weights=np.array(edge_weights),
-                iterations=self.config.forceatlas2_iterations,
-            )
-            self.node_positions = self.forceatlas2.get_positions()
     
     def _draw_nodes(self):
         """Draw or update node collection."""
@@ -451,7 +279,7 @@ class ParticleSystemVisualizer:
         
         
         for port in self.palette.ports:
-            port_edges = [(u, v) for u, v, pi, pj in self.current_edges if pi == port or pj == port]
+            port_edges = [(u, v) for u, v, pi, pj, _key in self.current_edges if pi == port or pj == port]
             if not port_edges:
                 continue
             
@@ -500,9 +328,13 @@ class ParticleSystemVisualizer:
         if not self._running:
             return
         
-        self.step_count += 1
-        
-        stepped = self.system.step()
+        stepped = False
+        for _ in range(self.config.steps_per_frame):
+            if not self.system.step():
+                self._running = False
+                break
+            stepped = True
+            self.step_count += 1
         
         added, removed = self._sync_graph_with_system()
         
@@ -510,7 +342,7 @@ class ParticleSystemVisualizer:
         
         self.layout_step_count += 1
         if self.layout_step_count >= self.config.layout_update_interval:
-            self._update_forceatlas2()
+            self._update_layout()
             self.layout_step_count = 0
         
         self._draw_nodes()
@@ -560,9 +392,11 @@ class ParticleSystemVisualizer:
         def frame_generator():
             frame = 0
             while self._running:
-                if max_frames and frame >= max_frames:
+                if max_frames is not None and frame >= max_frames:
+                    self._running = False
                     break
-                if max_time and self.system.current_time >= max_time:
+                if max_time is not None and self.system.current_time >= max_time:
+                    self._running = False
                     break
                 yield frame
                 frame += 1
@@ -608,7 +442,7 @@ class ParticleSystemVisualizer:
             
             self.layout_step_count += 1
             if self.layout_step_count >= interval:
-                self._update_forceatlas2()
+                self._update_layout()
                 self.layout_step_count = 0
             
             frame_data = {
@@ -647,29 +481,13 @@ class ParticleSystemVisualizer:
         }
     
     def reset_layout(self, seed: Optional[int] = None):
-        """Reset layout to random positions and re-run ForceAtlas2."""
-        if seed is not None:
-            np.random.seed(seed)
-        self.node_positions = np.random.randn(self.n_particles, 2) * 1
-        self.forceatlas2.set_positions(self.node_positions)
-        self.forceatlas2.state.velocities.fill(0)
+        """Reset layout to random positions and reapply spring layout."""
+        self.node_positions = np.random.default_rng(seed).normal(size=(self.n_particles, 2))
         self._initialize_positions()
 
-
-def create_visualizer(
-    system: ParticleSystem,
-    **config_kwargs
-) -> ParticleSystemVisualizer:
-    """
-    Factory function to create a ParticleSystemVisualizer with custom config.
-    
-    Example:
-        system = create_system_from_strings([['white', 'red'], ['green', 'blue']])
-        visualizer = create_visualizer(system, layout_update_interval=5, animation_interval=50)
-        visualizer.animate(max_frames=200)
-    """
-    config = VisualizationConfig(**config_kwargs)
-    return ParticleSystemVisualizer(system, config)
+    def run(self, max_frames: Optional[int] = None, max_time: Optional[float] = None):
+        """Open the live animation window and run the simulation."""
+        return self.animate(max_frames=max_frames, max_time=max_time)
 
 
 def animate_system(
@@ -677,7 +495,7 @@ def animate_system(
     max_frames: int = 200,
     max_time: Optional[float] = None,
     layout_update_interval: int = 1,
-    animation_interval: int = 1,
+    animation_interval: int = 50,
     figsize: Tuple[float, float] = (12, 10),
     save_path: Optional[str] = None,
     **kwargs
@@ -689,7 +507,7 @@ def animate_system(
         system: ParticleSystem to animate
         max_frames: Maximum animation frames
         max_time: Maximum simulation time
-        layout_update_interval: ForceAtlas2 update frequency (steps)
+        layout_update_interval: Spring-layout update frequency (steps)
         animation_interval: Milliseconds between frames
         figsize: Figure size
         save_path: Optional path to save animation (GIF)
@@ -705,7 +523,7 @@ def animate_system(
         save_path=save_path,
         **kwargs
     )
-    visualizer = ParticleSystemVisualizer(system, config)
+    visualizer = IGSPAVisualizer(system, config=config)
     return visualizer.animate(max_frames=max_frames, max_time=max_time)
 
 
@@ -721,14 +539,14 @@ def run_headless_simulation(
     Args:
         system: ParticleSystem to simulate
         max_steps: Number of simulation steps
-        layout_update_interval: ForceAtlas2 update frequency
+        layout_update_interval: Spring-layout update frequency
         callback: Optional callback(step, positions, frame_data)
         
     Returns:
         List of frame data dictionaries
     """
     config = VisualizationConfig(layout_update_interval=layout_update_interval)
-    visualizer = ParticleSystemVisualizer(system, config)
+    visualizer = IGSPAVisualizer(system, config=config)
     return visualizer.run_headless(max_steps, layout_update_interval, callback)
 
 
@@ -745,7 +563,7 @@ def plot_static_snapshot(
         system: ParticleSystem to plot
         ax: Optional matplotlib axes to plot on
         config: Optional VisualizationConfig
-        layout_iterations: ForceAtlas2 iterations for layout
+        layout_iterations: Spring-layout iterations
         
     Returns:
         (figure, axes) tuple
@@ -753,12 +571,8 @@ def plot_static_snapshot(
     if config is None:
         config = VisualizationConfig()
     
-    visualizer = ParticleSystemVisualizer(system, config)
-    visualizer.forceatlas2.run(
-        edges=[(b.particle_i, b.particle_j) for b in system.bond_graph.get_bonds()],
-        iterations=layout_iterations,
-    )
-    visualizer.node_positions = visualizer.forceatlas2.get_positions()
+    visualizer = IGSPAVisualizer(system, config=config)
+    visualizer._update_layout(iterations=layout_iterations, interpolate=False)
     visualizer._update_node_properties()
     
     if ax is None:
@@ -779,7 +593,7 @@ def plot_static_snapshot(
         zorder=3,
     )
     
-    for u, v, port_i, port_j in visualizer.current_edges:
+    for u, v, port_i, port_j, _edge_key in visualizer.current_edges:
         x1, y1 = visualizer.node_positions[u]
         x2, y2 = visualizer.node_positions[v]
         color = visualizer.port_colors.get(port_i, 'gray')
@@ -808,10 +622,8 @@ def plot_static_snapshot(
 
 
 __all__ = [
+    "IGSPAVisualizer",
     "VisualizationConfig",
-    "ForceAtlas2Layout",
-    "ParticleSystemVisualizer",
-    "create_visualizer",
     "animate_system",
     "run_headless_simulation",
     "plot_static_snapshot",
