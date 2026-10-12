@@ -44,7 +44,7 @@ __all__ = [
     "ParticleSystem",
     "create_system_from_strings",
     "create_system_from_config",
-    "create_system_from_configuration",
+    # "create_system_from_configuration",
     "SimulationConfig",
     "ColorPalette",
     "COMPLEMENTS",
