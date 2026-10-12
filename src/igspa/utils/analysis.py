@@ -8,8 +8,8 @@ from typing import List, Dict, Tuple, Set, Optional, Callable, Any
 from collections import Counter
 from dataclasses import dataclass
 
-from ..core.colors import Color, ColorPalette
-from ..core.particle import Particle, ParticleBlueprint
+from ..core.ports import PortPalette
+from ..core.particle import Particle, ParticleArchetype
 from ..topology.graph import BondGraph, Bond, ComplexAnalyzer
 from ..geometry.manifold import InformationManifold, FisherMetric
 
@@ -17,57 +17,58 @@ from ..geometry.manifold import InformationManifold, FisherMetric
 def validate_system(system) -> List[str]:
     """
     Validate internal consistency of a ParticleSystem.
-    
+
     Returns list of error messages (empty if valid).
     """
     errors = []
-    
+
     # Check particle availability vs bonds
     for particle in system.particles:
-        for color in particle.capacities:
-            bound_count = system.bond_graph.get_port_degree(particle.particle_id, color.name.lower())
-            available = particle.available_sites.get(color, 0)
-            capacity = particle.capacities[color]
-            
+        for port in particle.available_sites.keys():
+            available = particle.available_sites.get(port, 0)
+            capacity = particle.capacities.get(port, 0)  # Use get for safety
+
+            bound_count = system.bond_graph.get_port_degree(particle.particle_id, port)
+
             if bound_count + available != capacity:
                 errors.append(
-                    f"Particle {particle.label} color {color.name}: "
+                    f"Particle {particle.label} port {port}: "
                     f"bound({bound_count}) + available({available}) != capacity({capacity})"
                 )
-            
+
             if available < 0 or available > capacity:
                 errors.append(
-                    f"Particle {particle.label} color {color.name}: "
+                    f"Particle {particle.label} port {port}: "
                     f"available({available}) out of bounds [0, {capacity}]"
                 )
-    
+
     # Check bond graph consistency
     for bond in system.bond_graph.get_bonds():
         # Verify particles have the bond
         p_i = system.particles[bond.particle_i]
         p_j = system.particles[bond.particle_j]
-        
+
         # Check that particles actually have these bonds
         # (This is implicitly checked by degree counts above)
         pass
-    
+
     # Check for duplicate bonds (shouldn't happen in MultiGraph with unique keys)
     seen_keys = set()
     for bond in system.bond_graph.get_bonds():
         if bond.edge_key in seen_keys:
             errors.append(f"Duplicate edge key: {bond.edge_key}")
         seen_keys.add(bond.edge_key)
-    
+
     return errors
 
 
 def compute_detailed_balance(system, n_samples: int = 1000) -> Dict:
     """
     Estimate detailed balance by sampling forward/backward transitions.
-    
+
     For a system in equilibrium, the probability flux between any two states
     should balance: π(x) * P(x→y) = π(y) * P(y→x)
-    
+
     This is a diagnostic tool to verify the SSA implementation correctness.
     """
     # This would require running the system to equilibrium and measuring
@@ -84,71 +85,84 @@ class SteadyStateAnalyzer:
     Analyze steady-state properties of the assembly system.
     """
     system: 'ParticleSystem'
-    
-    def estimate_equilibrium_constants(self) -> Dict[Tuple[Color, Color], float]:
+
+    def estimate_equilibrium_constants(self) -> Dict[Tuple[str, str], float]:
         """
         Estimate effective equilibrium constants K_eq = k_on / k_off for each channel
         from the observed binding statistics.
-        
+
         At equilibrium: <n_bound> / <n_free> ≈ K_eq * (concentration terms)
         """
         # Count total bonds per channel
         bond_counts = Counter()
         for bond in self.system.bond_graph.get_bonds():
-            channel = tuple(sorted([bond.color_i, bond.color_j], key=lambda c: c.name))
+            # Bond stores port_i and port_j as strings
+            port_i = bond.port_i
+            port_j = bond.port_j
+
+            # Canonicalize the channel tuple by sorting the port names (strings)
+            channel = tuple(sorted([port_i, port_j]))
+
             bond_counts[channel] += 1
-        
-        # Compute available sites per color
-        available = {c: 0 for c in self.system.palette.colors}
+
+        # Compute available sites per port name
+        available = {}
+        all_ports = set(self.system.palette.ports)
+        for port in all_ports:
+            available[port] = 0
+
         for p in self.system.particles:
-            for c, count in p.available_sites.items():
-                available[c] += count
-        
+            for port, count in p.available_sites.items():
+                if port in available:
+                    available[port] += count
+
         # Estimate K_eq from ratio
         k_on = self.system.config.k_on
         k_off = self.system.config.k_off
-        
+
         results = {}
         for channel, n_bonds in bond_counts.items():
-            c1, c2 = channel
-            # Simplified: K_eq ≈ n_bonds / (available_c1 * available_c2)
-            # In true equilibrium: n_bonds = K_eq * available_c1 * available_c2
-            if available[c1] > 0 and available[c2] > 0:
-                k_eq_est = n_bonds / (available[c1] * available[c2])
+            # channel is a tuple of two sorted port names, e.g., ('red', 'white')
+            port_a, port_b = channel
+
+            # Simplified: K_eq ≈ n_bonds / (available_portA * available_portB)
+            # In true equilibrium: n_bonds = K_eq * available_portA * available_portB
+            if available[port_a] > 0 and available[port_b] > 0:
+                k_eq_est = n_bonds / (available[port_a] * available[port_b])
                 results[channel] = k_eq_est
             else:
                 results[channel] = float('inf') if n_bonds > 0 else 0.0
-        
+
         return results
-    
+
     def compute_gel_fraction(self) -> float:
         """
         Compute gel fraction: fraction of particles in the largest complex.
-        
+
         In polymerization theory, gelation occurs when a giant component
         emerges containing a finite fraction of all particles.
         """
         stats = self.system.complex_analyzer.get_complex_statistics()
         return stats.get('gel_fraction', 0.0)
-    
+
     def compute_size_distribution(self) -> Counter:
         """Get complex size distribution."""
         return self.system.complex_analyzer.get_complex_statistics()['size_distribution']
-    
+
     def compute_mean_cluster_size(self) -> float:
         """Weight-average mean cluster size (excludes gel if present)."""
         stats = self.system.complex_analyzer.get_complex_statistics()
         size_dist = stats['size_distribution']
-        
+
         if not size_dist:
             return 0.0
-        
+
         # Weight-average: Σ s² * n_s / Σ s * n_s
         numerator = sum(s * s * n for s, n in size_dist.items())
         denominator = sum(s * n for s, n in size_dist.items())
-        
+
         return numerator / denominator if denominator > 0 else 0.0
-    
+
     def is_gelated(self, threshold: float = 0.1) -> bool:
         """Check if system has gelled (largest complex > threshold fraction)."""
         return self.compute_gel_fraction() > threshold
@@ -157,35 +171,35 @@ class SteadyStateAnalyzer:
 def analyze_manifold_geometry(system) -> Dict:
     """
     Analyze the information geometric properties of the current state.
-    
+
     Computes:
     - Distances to saturation for each particle
     - Metric tensor condition numbers
     - Geodesic distances between particles
     """
     manifold = system.manifold
-    
+
     results = {
         'distances_to_saturation': {},
         'pairwise_distances': {},
         'metric_condition_numbers': {},
     }
-    
+
     # Distance to saturation (how "exhausted" each particle is)
     for i, particle in enumerate(system.particles):
         dist = manifold.distance_to_saturation(i)
         results['distances_to_saturation'][particle.label] = dist
-    
+
     # Pairwise geodesic distances on the manifold
     for i, p1 in enumerate(system.particles):
         for j, p2 in enumerate(system.particles):
             if i < j:
                 d = manifold.metric.geodesic_distance(
-                    manifold.get_theta(i), 
+                    manifold.get_theta(i),
                     manifold.get_theta(j)
                 )
                 results['pairwise_distances'][(p1.label, p2.label)] = d
-    
+
     # Condition numbers of metric tensors
     for i, particle in enumerate(system.particles):
         theta = manifold.get_theta(i)
@@ -198,14 +212,14 @@ def analyze_manifold_geometry(system) -> Dict:
         else:
             cond = np.inf
         results['metric_condition_numbers'][particle.label] = cond
-    
+
     return results
 
 
 def compute_thermodynamic_quantities(system) -> Dict:
     """
     Compute thermodynamic quantities from the current state.
-    
+
     Using the information geometry framework:
     - Free energy: F = -log Z (partition function)
     - Entropy: S = -Σ p log p (from availability distribution)
@@ -214,25 +228,25 @@ def compute_thermodynamic_quantities(system) -> Dict:
     # Availability fractions
     all_fractions = []
     for particle in system.particles:
-        for color in system.palette.colors:
-            cap = particle.capacities.get(color, 0)
+        for port in system.palette.ports:
+            cap = particle.capacities.get(port, 0)
             if cap > 0:
-                frac = particle.available_sites.get(color, 0) / cap
+                frac = particle.available_sites.get(port, 0) / cap
                 all_fractions.append(frac)
-    
+
     if not all_fractions:
         return {'entropy': 0.0, 'free_energy': 0.0}
-    
+
     # Entropy from availability distribution (Shannon entropy)
     # Treat as probability distribution (normalize)
     fractions = np.array(all_fractions)
     probs = fractions / np.sum(fractions) if np.sum(fractions) > 0 else np.ones_like(fractions) / len(fractions)
     entropy = -np.sum(probs * np.log(probs + 1e-10))
-    
+
     # Free energy estimate (relative)
     # For ideal binding: F ≈ -k_on/k_off * total_bonds + entropic terms
     free_energy = - (system.config.k_on / system.config.k_off) * system.n_bonds + entropy
-    
+
     return {
         'entropy': float(entropy),
         'free_energy': float(free_energy),
@@ -242,22 +256,22 @@ def compute_thermodynamic_quantities(system) -> Dict:
     }
 
 
-def run_ensemble(system_factory: Callable, n_runs: int = 10, 
+def run_ensemble(system_factory: Callable, n_runs: int = 10,
                  max_steps: int = 1000, **run_kwargs) -> List[Dict]:
     """
     Run multiple independent simulation trajectories for ensemble statistics.
-    
+
     Args:
         system_factory: Callable returning a new ParticleSystem instance
         n_runs: Number of independent runs
         max_steps: Steps per run
         **run_kwargs: Additional arguments passed to system.run()
-    
+
     Returns:
         List of final statistics dictionaries
     """
     results = []
-    
+
     for run_idx in range(n_runs):
         system = system_factory()
         # Remove verbose from run_kwargs to avoid duplication
@@ -265,7 +279,7 @@ def run_ensemble(system_factory: Callable, n_runs: int = 10,
         stats = system.run(max_steps=max_steps, verbose=False, **run_kwargs_no_verbose)
         stats['run_id'] = run_idx
         results.append(stats)
-    
+
     return results
 
 
@@ -275,10 +289,10 @@ def compute_ensemble_statistics(ensemble_results: List[Dict]) -> Dict:
     """
     if not ensemble_results:
         return {}
-    
+
     keys = ensemble_results[0].keys()
     stats = {}
-    
+
     for key in keys:
         values = [r[key] for r in ensemble_results if key in r and isinstance(r[key], (int, float))]
         if values:
@@ -289,7 +303,7 @@ def compute_ensemble_statistics(ensemble_results: List[Dict]) -> Dict:
                 'max': np.max(values),
                 'n': len(values),
             }
-    
+
     return stats
 
 

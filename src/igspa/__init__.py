@@ -19,7 +19,7 @@ __version__ = "1.0.0"
 __author__ = "IGSPA Team"
 
 from .core.particle import Particle, ParticleBlueprint, ParticleArchetype
-from .core.system import ParticleSystem, create_system_from_strings, create_system_from_config, SimulationConfig
+from .core.system import ParticleSystem, create_system_from_strings, create_system_from_config, create_system_from_config, SimulationConfig
 from .core.colors import Color, ColorPalette, COMPLEMENTS
 from .core.ports import PortPalette, DEFAULT_PORT_PALETTE
 from .core.config import SystemConfiguration
@@ -44,6 +44,7 @@ __all__ = [
     "ParticleSystem",
     "create_system_from_strings",
     "create_system_from_config",
+    "create_system_from_configuration",
     "SimulationConfig",
     "ColorPalette",
     "COMPLEMENTS",

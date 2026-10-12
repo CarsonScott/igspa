@@ -385,43 +385,43 @@ class ParticleSystem:
                 print(f"Complex {idx + 1} (Size {len(comp)}): {sorted(comp)}")
 
     def get_bond_list(self) -> List[Tuple[int, int, str, str]]:
-        """Get all bonds as (particle_i, particle_j, color_i, color_j)."""
-        bonds = []
-        for bond in self.bond_graph.get_bonds():
-            bonds.append((
-                bond.particle_i,
-                bond.particle_j,
-                bond.color_i.name.lower(),
-                bond.color_j.name.lower()
-            ))
-        return bonds
+            """Get all bonds as (particle_i, particle_j, port_i, port_j)."""
+            bonds = []
+            for bond in self.bond_graph.get_bonds():
+                bonds.append((
+                    bond.particle_i,
+                    bond.particle_j,
+                    bond.port_i,
+                    bond.port_j
+                ))
+            return bonds
 
-    def get_availability_matrix(self) -> Dict[str, List[int]]:
-        """Get availability matrix: particle -> {color: available_count}."""
-        result = {}
-        for particle in self.particles:
-            result[particle.label] = {
-                c.name.lower(): particle.available_sites.get(c, 0)
-                for c in self.palette.colors
-            }
-        return result
+    def get_availability_matrix(self) -> Dict[str, Dict[str, int]]:
+            """Get availability matrix: particle -> {port: available_count}."""
+            result = {}
+            for particle in self.particles:
+                result[particle.label] = {
+                    port: particle.available_sites.get(port, 0)
+                    for port in self.palette.ports
+                }
+            return result
 
     def get_state_snapshot(self) -> SimulationState:
-        """Get complete state snapshot for checkpointing."""
-        complex_stats = self.complex_analyzer.get_complex_statistics() if self.config.track_complexes else {}
+            """Get complete state snapshot for checkpointing."""
+            complex_stats = self.complex_analyzer.get_complex_statistics() if self.config.track_complexes else {}
 
-        return SimulationState(
-            step=self.current_step,
-            time=self.current_time,
-            particles=self.particles.copy(),
-            bond_graph=self.bond_graph,
-            manifold=self.manifold,
-            complex_stats=complex_stats,
-            sampler_state={
-                'buckets': {c.name: len(b) for c, b in self.bucket_sampler.buckets.items()},
-                'aggregates': {c.name: a for c, a in self.bucket_sampler.aggregate_sites.items()},
-            }
-        )
+            return SimulationState(
+                step=self.current_step,
+                time=self.current_time,
+                particles=self.particles.copy(),
+                bond_graph=self.bond_graph,
+                manifold=self.manifold,
+                complex_stats=complex_stats,
+                sampler_state={
+                    'buckets': {port: len(b) for port, b in self.bucket_sampler.buckets.items()},
+                    'aggregates': {port: a for port, a in self.bucket_sampler.aggregate_sites.items()},
+                }
+            )
 
     def __str__(self) -> str:
         return (f"ParticleSystem(n_particles={self.n_particles}, "
@@ -468,24 +468,24 @@ def create_system_from_config(
     **config_kwargs
 ) -> ParticleSystem:
     """
-    Factory function to create a system from a SystemConfiguration.
-
-    This is the preferred way to create systems with the new port-palette model.
-
-    Args:
-        config: SystemConfiguration containing palette and archetypes
-        n_particles: Number of particles to create
-        p: Probability distribution for archetype selection:
-           - None for uniform distribution
-           - list of probabilities in archetype order
-           - dict mapping archetype -> probability
-        k_on: Binding rate constant
-        k_off: Breaking rate constant
-        seed: Random seed for reproducibility
-        **config_kwargs: Additional SimulationConfig parameters
-
-    Returns:
-        Configured ParticleSystem instance
+    return ParticleSystem.create_from_config(
+        config=config,
+        n_particles=n_particles,
+        p=p,
+        k_on=k_on,
+        k_off=k_off,
+        seed=seed,
+        **config_kwargs
+    )
+def create_system_from_configuration(
+    config: SystemConfiguration,
+    n_particles: int,
+    p: Optional[Union[List[float], Dict[ParticleArchetype, float]]] = None,
+    k_on: float = 1.0,
+    k_off: float = 0.1,
+    seed: Optional[int] = None,
+    **config_kwargs
+) -> ParticleSystem:
     """
     return ParticleSystem.create_from_config(
         config=config,

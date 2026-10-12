@@ -2,15 +2,15 @@
 Graph Topology: Explicit multi-graph representation of particle bonds.
 
 The Explicit Graph Topology G(t) = (V, E(t)) tracks the actual physical
-structure of the assembly. Bonds are colored edges between particles,
-forming a multi-graph where multiple edges (of different colors) can exist
+structure of the assembly. Bonds are edges between particles at specific ports,
+forming a multi-graph where multiple edges (of different ports) can exist
 between the same pair of particles.
 
 Key features:
-- NetworkX MultiGraph for parallel edges with color attributes
+- NetworkX MultiGraph for parallel edges with port attributes
 - Efficient bond addition/removal with O(1) updates
 - Complex detection via connected components
-- Color-layer adjacency matrices for mathematical analysis
+- Port-layer adjacency matrices for mathematical analysis
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ class Bond:
     port_i: str  # Port string (e.g., "white")
     port_j: str  # Port string (e.g., "black")
     edge_key: int  # NetworkX edge key for multi-graph
-    
+
     def __str__(self) -> str:
         return f"{self.particle_i}({self.port_i})--{self.particle_j}({self.port_j})"
 
@@ -51,16 +51,16 @@ class Bond:
 class BondGraph:
     """
     Explicit Multi-Graph Topology tracking all bonds.
-    
+
     Uses NetworkX MultiGraph where:
     - Nodes = particle indices (0 to N-1)
-    - Edges = bonds, with attributes: color_i, color_j, edge_key
-    - Multiple edges between same nodes allowed (different colors or same color)
-    
+    - Edges = bonds, with attributes: port_i, port_j, edge_key
+    - Multiple edges between same nodes allowed (different ports or same port)
+
     This corresponds to the mathematical G(t) = (V, E(t)) with adjacency
-    matrices A^c for each color layer.
+    matrices A^p for each port layer.
     """
-    
+
     def __init__(self, n_particles: int, palette: PortPalette):
         self.n_particles = n_particles
         self.palette = palette
@@ -71,25 +71,25 @@ class BondGraph:
         self._port_index: Dict[str, Set[Tuple[int, int, int]]] = defaultdict(set)
         # Degree tracking per particle per port
         self._port_degree: Dict[int, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    
+
     @property
     def n_bonds(self) -> int:
         return self.graph.number_of_edges()
-    
+
     @property
     def n_nodes(self) -> int:
         return self.n_particles
-    
-    def add_bond(self, particle_i: int, particle_j: int, 
+
+    def add_bond(self, particle_i: int, particle_j: int,
                  port_i: str, port_j: str) -> int:
         """
         Add a bond between particles at specified ports.
-        
+
         Returns the edge key for future reference.
         """
         edge_key = self.edge_counter
         self.edge_counter += 1
-        
+
         # Add to NetworkX graph
         self.graph.add_edge(
             particle_i, particle_j,
@@ -97,57 +97,57 @@ class BondGraph:
             port_i=port_i,
             port_j=port_j
         )
-        
+
         # Update port index
         self._port_index[port_i].add((particle_i, particle_j, edge_key))
         self._port_index[port_j].add((particle_j, particle_i, edge_key))
-        
+
         # Update port degrees
         self._port_degree[particle_i][port_i] += 1
         self._port_degree[particle_j][port_j] += 1
-        
+
         return edge_key
-    
+
     def remove_bond(self, particle_i: int, particle_j: int, edge_key: int) -> Optional[Bond]:
         """
         Remove a bond by its edge key.
-        
+
         Returns the removed bond info, or None if not found.
         """
         # Get bond data before removal
         if not self.graph.has_edge(particle_i, particle_j, key=edge_key):
             return None
-        
+
         edge_data = self.graph.get_edge_data(particle_i, particle_j, key=edge_key)
         port_i = edge_data['port_i']
         port_j = edge_data['port_j']
-        
+
         # Remove from NetworkX
         self.graph.remove_edge(particle_i, particle_j, key=edge_key)
-        
+
         # Update port index
         self._port_index[port_i].discard((particle_i, particle_j, edge_key))
         self._port_index[port_j].discard((particle_j, particle_i, edge_key))
-        
+
         # Update port degrees
         self._port_degree[particle_i][port_i] = max(0, self._port_degree[particle_i][port_i] - 1)
         self._port_degree[particle_j][port_j] = max(0, self._port_degree[particle_j][port_j] - 1)
-        
+
         # Clean up empty degree entries
         if self._port_degree[particle_i][port_i] == 0:
             del self._port_degree[particle_i][port_i]
         if self._port_degree[particle_j][port_j] == 0:
             del self._port_degree[particle_j][port_j]
-        
+
         return Bond(particle_i, particle_j, port_i, port_j, edge_key)
-    
+
     def get_bonds(self) -> List[Bond]:
         """Get all bonds as list."""
         bonds = []
         for u, v, key, data in self.graph.edges(keys=True, data=True):
             bonds.append(Bond(u, v, data['port_i'], data['port_j'], key))
         return bonds
-    
+
     def get_bonds_by_port(self, port: str) -> List[Bond]:
         """Get all bonds involving a specific port."""
         bonds = []
@@ -156,7 +156,7 @@ class BondGraph:
             if edge_data:
                 bonds.append(Bond(u, v, edge_data['port_i'], edge_data['port_j'], key))
         return bonds
-    
+
     def get_particle_bonds(self, particle_idx: int) -> List[Bond]:
         """Get all bonds for a specific particle."""
         bonds = []
@@ -172,58 +172,58 @@ class BondGraph:
                 else:
                     bonds.append(Bond(v, u, data['port_j'], data['port_i'], key))
         return bonds
-    
+
     def get_port_degree(self, particle_idx: int, port: str) -> int:
         """Get number of bonds of a specific port for a particle."""
         return self._port_degree[particle_idx].get(port, 0)
-    
+
     def get_all_port_degrees(self, particle_idx: int) -> Dict[str, int]:
         """Get all port degrees for a particle."""
         return dict(self._port_degree[particle_idx])
-    
+
     def has_bond_between(self, u: int, v: int) -> bool:
         """Check if any bond exists between two particles."""
         return self.graph.has_edge(u, v)
-    
-    def get_adjacency_matrix(self, color: Color) -> NDArray[np.int32]:
+
+    def get_adjacency_matrix(self, port: str) -> NDArray[np.int32]:
         """
-        Get adjacency matrix A^c for a specific color layer.
-        
-        A^c[i,j] = number of bonds of color c from i to j (counting color_i=c)
+        Get adjacency matrix A^p for a specific port layer.
+
+        A^p[i,j] = number of bonds of port p from i to j (counting port_i=p)
         """
         A = np.zeros((self.n_particles, self.n_particles), dtype=np.int32)
-        for u, v, key in self._color_index.get(color, set()):
+        for u, v, key in self._port_index.get(port, set()):
             edge_data = self.graph.get_edge_data(u, v, key=key)
-            if edge_data and edge_data['color_i'] == color:
+            if edge_data and edge_data['port_i'] == port:
                 A[u, v] += 1
-            elif edge_data and edge_data['color_j'] == color:
+            elif edge_data and edge_data['port_j'] == port:
                 A[v, u] += 1
         return A
-    
-    def get_all_adjacency_matrices(self) -> Dict[Color, NDArray[np.int32]]:
-        """Get adjacency matrices for all colors."""
-        return {color: self.get_adjacency_matrix(color) for color in self.palette.colors}
-    
-    def get_laplacian(self, color: Color = None) -> NDArray[np.float64]:
+
+    def get_all_adjacency_matrices(self) -> Dict[str, NDArray[np.int32]]:
+        """Get adjacency matrices for all ports."""
+        return {port: self.get_adjacency_matrix(port) for port in self.palette.ports}
+
+    def get_laplacian(self, port: str = None) -> NDArray[np.float64]:
         """
-        Get graph Laplacian. If color specified, use that color layer.
-        Otherwise, use total bond count (sum over colors).
+        Get graph Laplacian. If port specified, use that port layer.
+        Otherwise, use total bond count (sum over ports).
         """
-        if color is not None:
-            A = self.get_adjacency_matrix(color)
+        if port is not None:
+            A = self.get_adjacency_matrix(port)
         else:
             A = sum(self.get_all_adjacency_matrices().values())
-        
+
         degree = A.sum(axis=1)
         L = np.diag(degree) - A
         return L
-    
+
     def __len__(self) -> int:
         return self.n_bonds
-    
+
     def __iter__(self) -> Iterator[Bond]:
         return iter(self.get_bonds())
-    
+
     def __str__(self) -> str:
         return f"BondGraph(n_particles={self.n_particles}, n_bonds={self.n_bonds})"
 
@@ -231,16 +231,16 @@ class BondGraph:
 class ComplexAnalyzer:
     """
     Analyzes connected components (complexes) in the bond graph.
-    
+
     A "complex" is a connected component in the multi-graph, representing
     a physically connected assembly of particles.
     """
-    
+
     def __init__(self, bond_graph: BondGraph):
         self.bond_graph = bond_graph
         self._complexes: Optional[List[Set[int]]] = None
         self._complex_id_map: Optional[Dict[int, int]] = None  # particle -> complex_id
-    
+
     def find_complexes(self) -> List[Set[int]]:
         """Find all connected components (complexes)."""
         # Use underlying simple graph for connectivity
@@ -251,35 +251,35 @@ class ComplexAnalyzer:
             for node in complex_nodes:
                 self._complex_id_map[node] = cid
         return self._complexes
-    
+
     def get_complexes(self) -> List[Set[int]]:
         """Get cached complexes, computing if necessary."""
         if self._complexes is None:
             return self.find_complexes()
         return self._complexes
-    
+
     def get_complex_id(self, particle_idx: int) -> int:
         """Get the complex ID containing a particle."""
         if self._complex_id_map is None:
             self.find_complexes()
         return self._complex_id_map.get(particle_idx, -1)
-    
+
     def get_complex_sizes(self) -> List[int]:
         """Get sizes of all complexes."""
         return [len(c) for c in self.get_complexes()]
-    
+
     def get_largest_complex(self) -> Set[int]:
         """Get the largest complex (by particle count)."""
         complexes = self.get_complexes()
         if not complexes:
             return set()
         return max(complexes, key=len)
-    
+
     def get_complex_statistics(self) -> Dict:
         """Get summary statistics of complex distribution."""
         complexes = self.get_complexes()
         sizes = [len(c) for c in complexes]
-        
+
         if not sizes:
             return {
                 'n_complexes': 0,
@@ -289,10 +289,10 @@ class ComplexAnalyzer:
                 'mean_size': 0.0,
                 'monomer_fraction': 1.0
             }
-        
+
         size_dist = Counter(sizes)
         n_particles = sum(sizes)
-        
+
         return {
             'n_complexes': len(complexes),
             'total_particles': n_particles,
@@ -302,31 +302,31 @@ class ComplexAnalyzer:
             'monomer_fraction': size_dist.get(1, 0) / len(complexes),
             'gel_fraction': max(sizes) / n_particles if n_particles > 0 else 0.0
         }
-    
-    def get_complex_bond_counts(self) -> Dict[int, Dict[Color, int]]:
+
+    def get_complex_bond_counts(self) -> Dict[int, Dict[str, int]]:
         """
-        Count bonds per color within each complex.
-        
-        Returns: complex_id -> {color: count}
+        Count bonds per port within each complex.
+
+        Returns: complex_id -> {port: count}
         """
         complexes = self.get_complexes()
         result = {}
-        
+
         for cid, complex_nodes in enumerate(complexes):
-            color_counts = Counter()
+            port_counts = Counter()
             for bond in self.bond_graph:
                 if bond.particle_i in complex_nodes and bond.particle_j in complex_nodes:
-                    color_counts[bond.color_i] += 1
-            result[cid] = dict(color_counts)
-        
+                    port_counts[bond.port_i] += 1
+            result[cid] = dict(port_counts)
+
         return result
-    
+
     def invalidate_cache(self):
         """Invalidate cached complexes (call after graph modification)."""
         self._complexes = None
         self._complex_id_map = None
 
 
-def create_bond_graph_from_system(particles: List[Particle], palette: ColorPalette) -> BondGraph:
+def create_bond_graph_from_system(particles: List[Particle], palette: PortPalette) -> BondGraph:
     """Factory to create empty bond graph for a particle system."""
     return BondGraph(n_particles=len(particles), palette=palette)
