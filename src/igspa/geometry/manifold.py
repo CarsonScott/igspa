@@ -2,11 +2,11 @@
 Information Geometry: Fisher Information Metric and Shahshahani Manifold.
 
 This module implements the continuous "Implicit Information Manifold" where
-particle availability parameters θ_i^c live. The manifold is equipped with
+particle availability parameters θ_i^p live. The manifold is equipped with
 the Fisher Information Metric (Shahshahani metric), which governs distances
 between availability states.
 
-Key mathematical insight: As θ_i^c → 0 (sites exhausted), the informational
+Key mathematical insight: As θ_i^p → 0 (sites exhausted), the informational
 distance stretches to infinity, mirroring the thermodynamic resistance of
 rare-state updates. This naturally encodes the difficulty of finding the last
 few binding sites.
@@ -30,9 +30,9 @@ class FisherMetric:
     For a particle with availability fractions θ = (θ^1, ..., θ^m), the metric
     tensor is diagonal: g_ij = δ_ij / θ_i
 
-    The squared distance element: ds² = Σ_c (dθ^c)² / θ^c
+    The squared distance element: ds² = Σ_p (dθ^p)² / θ^p
 
-    This metric has the property that as θ^c → 0, distances diverge, making
+    This metric has the property that as θ^p → 0, distances diverge, making
     rare states "informationally far" - a geometric encoding of scarcity.
     """
     palette: PortPalette
@@ -42,10 +42,10 @@ class FisherMetric:
         Compute the Fisher metric tensor (diagonal matrix) at point theta.
 
         Args:
-            theta: Availability fractions θ^c for each port
+            theta: Availability fractions θ^p for each port
 
         Returns:
-            Diagonal matrix with entries 1/θ^c
+            Diagonal matrix with entries 1/θ^p
         """
         ports = sorted(self.palette.ports)
         dim = len(ports)
@@ -64,7 +64,7 @@ class FisherMetric:
         """
         Compute squared Fisher-Rao distance between two availability states.
 
-        For diagonal metric on simplex, this is: Σ (Δθ^c)² / θ^c (using midpoint)
+        For diagonal metric on simplex, this is: Σ (Δθ^p)² / θ^p (using midpoint)
         Or exact geodesic distance on probability simplex.
         """
         ports = sorted(self.palette.ports)
@@ -117,7 +117,7 @@ class FisherMetric:
         """
         Compute norm of a gradient vector under Fisher metric.
 
-        ||∇f||_g² = Σ (∂f/∂θ^c)² * θ^c
+        ||∇f||_g² = Σ (∂f/∂θ^p)² * θ^p
 
         This is the dual norm to the metric (using g^ij = θ^i δ^ij).
         """
@@ -200,7 +200,7 @@ class InformationManifold:
         """
         Compute global aggregate available sites per port.
 
-        Σ_i K_i^c θ_i^c = Σ_i available_sites_i^c
+        Σ_i K_i^p θ_i^p = Σ_i available_sites_i^p
 
         This is the key quantity for global bucket propensity calculation.
         """

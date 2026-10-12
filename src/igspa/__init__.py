@@ -5,22 +5,21 @@ global-bucket optimization, Fisher Information Geometry, and explicit
 graph topology tracking.
 
 Mathematical Foundation:
-- Implicit Information Manifold: Continuous availability parameters θ_i^c
+- Implicit Information Manifold: Continuous availability parameters θ_i^p
   governed by Fisher Information Metric (Shahshahani geometry)
-- Explicit Graph Topology: Multi-graph G(t) = (V, E(t)) with color-layer
-  adjacency matrices A^c
-- Global Buckets: B_c = {i ∈ V | θ_i^c > 0} for O(|C| + |E|) propensity evaluation
+- Explicit Graph Topology: Multi-graph G(t) = (V, E(t)) with port-layer
+- Adjacency matrices A^p
+- Global Buckets: B_p = {i ∈ V | θ_i^p > 0} for O(|P| + |E|) propensity evaluation
 - Two-Stage Gillespie Sampling: Channel selection → Weighted particle selection
 
-Complexity: O(|C| + |E|) per step vs O(N²·|C|) standard
+Complexity: O(|P| + |E|) per step vs O(N²·|P|) standard
 """
 
 __version__ = "1.0.0"
 __author__ = "IGSPA Team"
 
 from .core.particle import Particle, ParticleBlueprint, ParticleArchetype
-from .core.system import ParticleSystem, create_system_from_strings, create_system_from_config, create_system_from_config, SimulationConfig
-from .core.colors import Color, ColorPalette, COMPLEMENTS
+from .core.system import ParticleSystem, create_system_from_strings, create_system_from_config, SimulationConfig
 from .core.ports import PortPalette, DEFAULT_PORT_PALETTE
 from .core.config import SystemConfiguration
 from .algorithms.gillespie import (
@@ -55,8 +54,6 @@ __all__ = [
     "create_system_from_config",
     # "create_system_from_configuration",
     "SimulationConfig",
-    "ColorPalette",
-    "COMPLEMENTS",
     "PortPalette",
     "DEFAULT_PORT_PALETTE",
     "SystemConfiguration",

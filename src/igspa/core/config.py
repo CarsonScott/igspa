@@ -32,7 +32,7 @@ class SystemConfiguration:
 
     @classmethod
     def standard(cls) -> 'SystemConfiguration':
-        """Create the standard system matching the legacy color-based system."""
+        """Create the standard system with the default port pairs."""
         from .particle import ParticleArchetype  # Avoid circular import
         
         palette = PortPalette.standard()

@@ -45,7 +45,7 @@ class PortPalette:
 
     @classmethod
     def standard(cls) -> 'PortPalette':
-        """Create the standard 6-port, 3-palette matching the legacy color complement pairs."""
+        """Create the standard six-port palette with three binding pairs."""
         ports = frozenset(["white", "black", "red", "green", "blue", "yellow"])
         valid_pairs_tuple = (
             ("white", "black"),

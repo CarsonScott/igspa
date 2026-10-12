@@ -10,7 +10,7 @@ Demonstrates:
 
 import numpy as np
 from igspa import (
-    ParticleBlueprint, ParticleSystem, ColorPalette,
+    ParticleBlueprint, ParticleSystem, PortPalette,
     SimulationConfig, SimulationLogger, StateExporter,
     create_system_from_strings
 )
@@ -92,7 +92,7 @@ def run_with_composition_rejection():
     
     system = create_system_from_strings(particle_strings, k_on=1.0, k_off=0.1, use_composition_rejection=True, log_interval=200)
     
-    print(f"System: {system.n_particles} particles, {len(system.palette)} colors")
+    print(f"System: {system.n_particles} particles, {len(system.palette)} ports")
     print(f"Using Composition-Rejection: {system.config.use_composition_rejection}")
     
     stats = system.run(max_steps=500, verbose=True)
@@ -160,19 +160,19 @@ def analyze_manifold():
 
 
 def custom_palette_example():
-    """Example with custom color palette."""
+    """Example with a custom port palette."""
     print("\n" + "=" * 60)
-    print("Advanced Example: Custom Color Palette")
+    print("Advanced Example: Custom Port Palette")
     print("=" * 60)
     
-    # Define custom 4-color, 2-pair palette (e.g., DNA-like: A-T, C-G)
+    # Define a custom four-port palette with two binding pairs.
     custom_pairs = {
         'A': 'T',
         'C': 'G',
     }
     
-    palette = ColorPalette.from_strings(custom_pairs)
-    print(f"Custom palette: {palette.colors}")
+    palette = PortPalette.from_strings(set(custom_pairs) | set(custom_pairs.values()), set(custom_pairs.items()))
+    print(f"Custom palette: {palette.ports}")
     print(f"Channels: {palette.get_channels()}")
     
     # Create system with custom palette

@@ -319,7 +319,7 @@ def create_standard_test_system(k_on: float = 1.5, k_off: float = 0.3) -> 'Parti
 
 
 def create_linear_chain_system(n_particles: int, k_on: float = 1.0, k_off: float = 0.1) -> 'ParticleSystem':
-    """Create a system of particles that can form linear chains (two complementary colors each)."""
+    """Create a system of particles that can form linear chains using two ports each."""
     from ..core.system import create_system_from_strings
     particles = []
     for i in range(n_particles):
@@ -331,7 +331,7 @@ def create_linear_chain_system(n_particles: int, k_on: float = 1.0, k_off: float
 
 
 def create_branched_system(n_particles: int, k_on: float = 1.0, k_off: float = 0.1) -> 'ParticleSystem':
-    """Create a system with branching potential (three colors per particle)."""
+    """Create a system with branching potential using three ports per particle."""
     from ..core.system import create_system_from_strings
     particles = []
     for i in range(n_particles):

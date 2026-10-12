@@ -15,7 +15,7 @@ from collections import Counter
 import numpy as np
 import time
 
-from .colors import Color, ColorPalette, DEFAULT_PALETTE
+from .ports import PortPalette, DEFAULT_PORT_PALETTE
 from .particle import Particle, ParticleBlueprint, ParticleArchetype, create_particles_from_blueprints, create_particles_from_configuration
 from .config import SystemConfiguration
 from ..geometry.manifold import InformationManifold, create_manifold_from_blueprints
@@ -80,10 +80,10 @@ class ParticleSystem:
     def __init__(
         self,
         archetypes,
-        palette: PortPalette = None,
+        palette: Optional[PortPalette] = None,
         config: SimulationConfig = None
     ):
-        self.palette = palette or DEFAULT_PALETTE
+        self.palette = palette or DEFAULT_PORT_PALETTE
         self.config = config or SimulationConfig()
 
         # Set random seed if provided
@@ -241,13 +241,13 @@ class ParticleSystem:
             self.stats['time_per_step'].append(dt)
 
             if event_type == 'bind':
-                part_i, part_j, color_i, color_j = result[3], result[4], result[5], result[6]
-                self.sampler.execute_bind(part_i, part_j, color_i, color_j)
+                part_i, part_j, port_i, port_j = result[3], result[4], result[5], result[6]
+                self.sampler.execute_bind(part_i, part_j, port_i, port_j)
                 self.stats['bind_events'] += 1
 
                 # Run callbacks
                 for cb in self.config.callbacks:
-                    cb('bind', self.current_step, self.current_time, part_i, part_j, color_i, color_j)
+                    cb('bind', self.current_step, self.current_time, part_i, part_j, port_i, port_j)
 
             elif event_type == 'break':
                 bond = result[3]
@@ -283,8 +283,8 @@ class ParticleSystem:
             self.current_step += 1
 
             if event_type == 'bind':
-                part_i, part_j, color_i, color_j = event_data
-                self.sampler.execute_bind(part_i, part_j, color_i, color_j)
+                part_i, part_j, port_i, port_j = event_data
+                self.sampler.execute_bind(part_i, part_j, port_i, port_j)
                 self.stats['bind_events'] += 1
             elif event_type == 'break':
                 bond = event_data
@@ -434,11 +434,11 @@ def create_system_from_strings(
     particle_strings: List[List[str]],
     k_on: float = 1.0,
     k_off: float = 0.1,
-    palette: ColorPalette = None,
+    palette: Optional[PortPalette] = None,
     **config_kwargs
 ) -> ParticleSystem:
     """
-    Convenience factory to create system from string color lists.
+    Convenience factory to create a system from lists of port names.
 
     Example:
         system = create_system_from_strings([
@@ -448,15 +448,15 @@ def create_system_from_strings(
         ], k_on=1.5, k_off=0.3)
     """
     if palette is None:
-        palette = DEFAULT_PALETTE
+        palette = DEFAULT_PORT_PALETTE
 
-    blueprints = [
-        ParticleBlueprint.from_string_list(colors, palette)
-        for colors in particle_strings
+    archetypes = [
+        ParticleArchetype.from_string_list(port_strings, palette)
+        for port_strings in particle_strings
     ]
 
     config = SimulationConfig(k_on=k_on, k_off=k_off, **config_kwargs)
-    return ParticleSystem(blueprints, palette, config)
+    return ParticleSystem(archetypes, palette, config)
 
 
 def create_system_from_config(

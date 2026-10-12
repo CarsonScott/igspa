@@ -9,7 +9,7 @@ from igspa.core.system import create_system_from_config, ParticleSystem
 
 
 def test_port_palette_standard():
-    """Test that the standard port palette matches the legacy color pairs."""
+    """Test that the standard port palette has the expected binding pairs."""
     palette = PortPalette.standard()
     assert len(palette) == 6
     assert "white" in palette
@@ -124,7 +124,7 @@ def test_create_particles_from_configuration_list_probabilities():
     palette = PortPalette.from_strings({"A", "B"}, {("A", "B")})
     archetype1 = ParticleArchetype.from_port_list(["A"], label="A1")
     archetype2 = ParticleArchetype.from_port_list(["B"], label="B1")
-    config = SystemConfiguration("test", palette, frozenset([archetype1, archetype2]))
+    config = SystemConfiguration("test", palette, (archetype1, archetype2))
     
     # Create particles with 75% A1, 25% B1
     particles = create_particles_from_configuration(100, config, p=[0.75, 0.25], seed=42)

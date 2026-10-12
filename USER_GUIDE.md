@@ -44,33 +44,33 @@ print(f"Final bonds: {stats['final_bonds']}")
 
 ### Particles & Binding Sites
 
-Each particle has **binding sites** of specific **colors**. Colors come in complementary pairs:
+Each particle has **binding sites** identified by ports. The default palette defines three valid binding pairs:
 - `white` ↔ `black`
 - `red` ↔ `green`
 - `blue` ↔ `yellow`
 
-A particle can bind to another if it has an available site of a color complementary to the other particle's available site.
+A particle can bind to another when each has an available site on a port pair allowed by the palette.
 
 ### Dual Representation
 
 IGSPA maintains two synchronized representations:
 
 1. **Implicit Information Manifold** (Continuous)
-   - Tracks availability fractions θᵢᶜ ∈ [0, 1] for each particle and color
+   - Tracks availability fractions θᵢᵖ ∈ [0, 1] for each particle and port
    - Equipped with Fisher Information Metric (Shahshahani geometry)
    - As θ → 0, informational distance → ∞ (scarcity geometry)
 
 2. **Explicit Graph Topology** (Discrete)
-   - Multi-graph G(t) = (V, E(t)) with colored edges
+   - Multi-graph G(t) = (V, E(t)) with port-labeled edges
    - Tracks exact bond structure
    - Enables complex detection via connected components
 
 ### Global Bucket Optimization
 
 Instead of O(N²) pairwise evaluation, IGSPA uses **global buckets**:
-- B_c = {i | particle i has available sites of color c}
-- Aggregate propensities: α_bind = k_on × (Σᵢ∈B_c availableᵢᶜ) × (Σⱼ∈B₋c availableⱼ₋c)
-- Complexity: O(|C| + |E|) per step vs O(N²|C|) standard
+- B_p = {i | particle i has available sites on port p}
+- Aggregate propensities sum over allowed port pairs (p, q): α_bind = k_on × (Σᵢ∈B_p availableᵢᵖ) × (Σⱼ∈B_q availableⱼᑫ)
+- Complexity: O(|P| + |E|) per step vs O(N²|P|) standard
 
 ---
 
@@ -92,7 +92,7 @@ Dependencies:
 from igspa import (
     ParticleBlueprint, 
     ParticleSystem, 
-    ColorPalette,
+    PortPalette,
     create_system_from_strings
 )
 
@@ -105,7 +105,7 @@ system = create_system_from_strings([
 ], k_on=1.5, k_off=0.3)
 
 # Method 2: Explicit blueprints
-palette = ColorPalette.standard()
+palette = PortPalette.standard()
 blueprints = [
     ParticleBlueprint.from_string_list(['white', 'red'], palette),
     ParticleBlueprint.from_string_list(['green', 'blue'], palette),
@@ -114,7 +114,7 @@ config = SimulationConfig(k_on=1.0, k_off=0.1)
 system = ParticleSystem(blueprints, palette, config)
 
 # Method 3: Custom palette (e.g., DNA-like)
-dna_palette = ColorPalette.from_strings({'A': 'T', 'C': 'G'})
+dna_palette = PortPalette.from_strings({'A', 'T', 'C', 'G'}, {('A', 'T'), ('C', 'G')})
 system = create_system_from_strings([
     ['A', 'C'],
     ['T', 'G'],
@@ -296,8 +296,7 @@ else:
 | `Particle` | `igspa.core.particle` | Dynamic particle instance |
 | `ParticleSystem` | `igspa.core.system` | Main simulation orchestrator |
 | `SimulationConfig` | `igspa.core.system` | Configuration dataclass |
-| `ColorPalette` | `igspa.core.colors` | Binding color alphabet |
-| `Color` | `igspa.core.colors` | Enum of binding colors |
+| `PortPalette` | `igspa.core.ports` | Port names and allowed binding pairs |
 
 ### Geometry
 
@@ -311,14 +310,14 @@ else:
 | Class | Module | Description |
 |-------|--------|-------------|
 | `BondGraph` | `igspa.topology.graph` | Multi-graph of bonds |
-| `Bond` | `igspa.topology.graph` | Single colored bond |
+| `Bond` | `igspa.topology.graph` | Single port-labeled bond |
 | `ComplexAnalyzer` | `igspa.topology.graph` | Connected component analysis |
 
 ### Algorithms
 
 | Class | Module | Description |
 |-------|--------|-------------|
-| `GlobalBucketSampler` | `igspa.algorithms.gillespie` | O(|C|+|E|) propensity eval |
+| `GlobalBucketSampler` | `igspa.algorithms.gillespie` | O(|P|+|E|) propensity eval |
 | `TwoStageSampler` | `igspa.algorithms.gillespie` | Standard two-stage SSA |
 | `CompositionRejectionSampler` | `igspa.algorithms.gillespie` | O(1) CR sampling |
 
@@ -353,10 +352,10 @@ from igspa import (
 
 | Function | Description |
 |----------|-------------|
-| `create_system_from_strings(particle_strings, k_on, k_off, palette=None, **config_kwargs)` | Main factory - create from string color lists |
+| `create_system_from_strings(particle_strings, k_on, k_off, palette=None, **config_kwargs)` | Main factory - create from port-name lists |
 | `create_standard_test_system(k_on=1.5, k_off=0.3)` | Standard 4-particle test system |
-| `create_linear_chain_system(n_particles, k_on=1.0, k_off=0.1)` | Linear chain forming system (alternating colors) |
-| `create_branched_system(n_particles, k_on=1.0, k_off=0.1)` | Branching capable system (3 colors per particle) |
+| `create_linear_chain_system(n_particles, k_on=1.0, k_off=0.1)` | Linear chain forming system (two ports per particle) |
+| `create_branched_system(n_particles, k_on=1.0, k_off=0.1)` | Branching-capable system (three ports per particle) |
 
 ---
 
@@ -367,7 +366,7 @@ from igspa import (
 Each particle i lives on a manifold ℳᵢ parameterized by availability fractions θᵢ = (θᵢ¹, ..., θᵢᵐ):
 
 ```
-θᵢᶜ = available_sitesᵢᶜ / capacityᵢᶜ
+θᵢᵖ = available_sitesᵢᵖ / capacityᵢᵖ
 ```
 
 The Fisher-Rao metric tensor is diagonal:
@@ -380,26 +379,26 @@ Geodesic distance between states p and q:
 d(p, q) = arccos(Σ √(pᵢ qᵢ))
 ```
 
-As θᵢᶜ → 0, distances diverge → ∞, geometrically encoding scarcity.
+As θᵢᵖ → 0, distances diverge → ∞, geometrically encoding scarcity.
 
 ### Global Bucket Propensity
 
-Binding propensity for channel (c, -c):
+Binding propensity for each allowed port pair (p, q):
 ```
-α_bind^{c,-c} = k_on × (Σᵢ∈B_c availableᵢᶜ) × (Σⱼ∈B₋c availableⱼ₋c)
+α_bind^{p,q} = k_on × (Σᵢ∈B_p availableᵢᵖ) × (Σⱼ∈B_q availableⱼᑫ), for each allowed pair (p, q)
 ```
 
 Total system propensity:
 ```
-a₀ = Σ_c α_bind^{c,-c} + k_off × |E|
+a₀ = Σ_(p,q) α_bind^{p,q} + k_off × |E|
 ```
 
 ### Two-Stage Sampling
 
-1. **Channel Selection**: Sample (c, -c) with probability ∝ α_bind^{c,-c}
+1. **Port-Pair Selection**: Sample allowed port pair (p, q) with probability ∝ α_bind^{p,q}
 2. **Particle Selection**: 
-   - Sample i ∈ B_c with P(i) ∝ availableᵢᶜ
-   - Sample j ∈ B₋c with P(j) ∝ availableⱼ₋c
+   - Sample i ∈ B_p with P(i) ∝ availableᵢᵖ
+   - Sample j ∈ B_q with P(j) ∝ availableⱼᑫ
 
 ---
 
@@ -438,7 +437,7 @@ The original minimal example.
 
 ## Performance Tips
 
-1. **Use global buckets** (default) for O(|C|+|E|) scaling
+1. **Use global buckets** (default) for O(|P|+|E|) scaling
 2. **Enable CR sampler** for N > 50 particles
 3. **Disable complex tracking** if not needed: `config.track_complexes = False`
 4. **Disable manifold tracking** if not needed: `config.track_manifold = False`
@@ -470,14 +469,14 @@ assert not errors, f"Validation failed: {errors}"
 
 ## Extending IGSPA
 
-### Custom Color Palettes
+### Custom Port Palettes
 
 ```python
-# 4-color, 2-pair system
-custom_palette = ColorPalette.from_strings({
-    'A': 'T',  # Pair 1
-    'C': 'G',  # Pair 2
-})
+# Four ports with two allowed binding pairs
+custom_palette = PortPalette.from_strings(
+    {'A', 'T', 'C', 'G'},
+    {('A', 'T'), ('C', 'G')},
+)
 ```
 
 ### Custom Analysis

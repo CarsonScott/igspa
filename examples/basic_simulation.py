@@ -5,7 +5,7 @@ This reproduces the original example.py functionality with the new modular API.
 """
 
 from igspa import (
-    ParticleBlueprint, ParticleSystem, ColorPalette,
+    ParticleBlueprint, ParticleSystem,
     create_system_from_strings
 )
 

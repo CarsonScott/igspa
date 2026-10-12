@@ -2,8 +2,8 @@
 
 Particles are the fundamental units of the assembly system. Each particle has:
 - A unique identifier
-- A static blueprint defining total site capacities per port (K_i^c)
-- Dynamic state tracking available sites (θ_i^c = available / capacity)
+- A static blueprint defining total site capacities per port (K_i^p)
+- Dynamic state tracking available sites (θ_i^p = available / capacity)
 - Optional label for visualization/debugging
 """
 
@@ -21,8 +21,7 @@ class ParticleArchetype:
     """
     Immutable blueprint defining a particle type's binding site capacities per port.
     
-    This replaces the old ParticleBlueprint concept, using port-based semantics
-    instead of color-based semantics.
+    Defines a particle type's binding site capacities by port.
     """
     port_counts: Dict[str, int]  # Port -> capacity
     label: Optional[str] = None
@@ -80,7 +79,7 @@ class Particle:
     """
     Dynamic particle instance with mutable binding state.
     
-    Tracks available sites per port (θ_i^c * K_i^c). When a site binds,
+    Tracks available sites per port (θ_i^p * K_i^p). When a site binds,
     available count decreases; when a bond breaks, it increases.
     
     Invariants:
@@ -98,12 +97,12 @@ class Particle:
     
     @property
     def capacities(self) -> Mapping[str, int]:
-        """Static site capacities (K_i^c)."""
+        """Static site capacities (K_i^p)."""
         return self.archetype.port_counts
     
     @property
     def fractions(self) -> Dict[str, float]:
-        """Availability fractions θ_i^c = available / capacity."""
+        """Availability fractions θ_i^p = available / capacity."""
         return {
             port: self.available_sites[port] / self.capacities[port]
             for port in self.capacities
