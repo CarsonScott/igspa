@@ -4,7 +4,7 @@ A framework for simulating interactive particle systems with no underlying geome
 
 Useful for modeling biomolecular dynamics in cellular simulations.
 
-## [VISUAL SLIDESHOW](docs/igspa_visual_slideshow.pdf)
+## [ILLUSTRATIVE SLIDESHOW](docs/igspa_visual_slideshow.pdf)
 
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
