@@ -79,21 +79,22 @@ class ParticleSystem:
 
     def __init__(
         self,
-        blueprints: List[ParticleBlueprint],
-        palette: ColorPalette = None,
+        archetypes,
+        palette: PortPalette = None,
         config: SimulationConfig = None
     ):
         self.palette = palette or DEFAULT_PALETTE
         self.config = config or SimulationConfig()
 
         # Set random seed if provided
-        if self.config.seed is not None:
+
+        if hasattr(self.config, 'seed') and self.config.seed is not None:
             np.random.seed(self.config.seed)
             import random
             random.seed(self.config.seed)
-
+        self.archetypes = archetypes
         # Create particles from blueprints
-        self.particles = create_particles_from_blueprints(blueprints, self.palette)
+        self.particles = create_particles_from_blueprints(archetypes, self.palette)
 
         # Create core components
         self.manifold = InformationManifold(
